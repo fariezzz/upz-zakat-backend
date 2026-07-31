@@ -2,10 +2,13 @@
 
 namespace App\Models;
 
+use App\Traits\ClearsDashboardCache;
 use Illuminate\Database\Eloquent\Model;
 
 class Transaksi extends Model
 {
+    use ClearsDashboardCache;
+
     protected $table = 'transaksi';
 
     protected $fillable = [

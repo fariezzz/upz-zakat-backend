@@ -25,6 +25,7 @@ Route::middleware('auth:sanctum')->group(function () {
     // Dashboard Routes
     // ——————————————————————————————
     Route::prefix('dashboard')->group(function () {
+        Route::get('/all',            [DashboardController::class, 'all']);
         Route::get('/stats',          [DashboardController::class, 'stats']);
         Route::get('/ringkasan-dana', [DashboardController::class, 'ringkasanDana']);
         Route::get('/grafik',         [DashboardController::class, 'grafik']);
