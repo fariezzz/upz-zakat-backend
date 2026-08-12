@@ -12,9 +12,10 @@ return new class extends Migration
             $table->id();
             $table->string('kode')->unique(); // TRX-001, TRX-002, dst
             $table->enum('jenis', ['masuk', 'keluar']);
-            $table->enum('kategori', ['Zakat', 'Infaq', 'Sedekah', 'Dana Lainnya', 'Penyaluran', 'Operasional']);
+            $table->string('kategori', 50); // Zakat Fitrah, Zakat Maal, Infaq, dll
             $table->string('deskripsi');
             $table->bigInteger('nominal'); // dalam rupiah
+            $table->string('metode', 50)->nullable(); // Transfer Bank, Tunai, QRIS
             $table->integer('tahun');
             $table->tinyInteger('bulan'); // 1-12
             $table->foreignId('muzakki_id')->nullable()->constrained('muzakki')->nullOnDelete();

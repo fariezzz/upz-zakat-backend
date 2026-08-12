@@ -17,6 +17,7 @@ class Transaksi extends Model
         'kategori',
         'deskripsi',
         'nominal',
+        'metode',
         'tahun',
         'bulan',
         'muzakki_id',

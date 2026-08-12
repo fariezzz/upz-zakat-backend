@@ -17,7 +17,7 @@ class DatabaseSeeder extends Seeder
         // 1. Admin User
         // ——————————————————————————————————
         User::updateOrCreate(
-            ['email' => 'admin@test.com'],
+            ['email' => 'admin@unsil.ac.id'],
             [
                 'name'     => 'Admin UPZ',
                 'password' => Hash::make('password'),
