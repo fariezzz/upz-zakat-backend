@@ -3,6 +3,8 @@
 use App\Http\Controllers\AuthController;
 use App\Http\Controllers\DashboardController;
 use App\Http\Controllers\MuzakkiController;
+use App\Http\Controllers\MustahikController;
+use App\Http\Controllers\ProgramController;
 use App\Http\Controllers\TransaksiController;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Route;
@@ -45,6 +47,23 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::post('/muzakki',            [MuzakkiController::class, 'store']);
     Route::put('/muzakki/{muzakki}',   [MuzakkiController::class, 'update']);
     Route::delete('/muzakki/{muzakki}',[MuzakkiController::class, 'destroy']);
+
+    // ——————————————————————————
+    // Mustahik Routes
+    // ——————————————————————————
+    Route::get('/mustahik',              [MustahikController::class, 'index']);
+    Route::post('/mustahik',             [MustahikController::class, 'store']);
+    Route::put('/mustahik/{mustahik}',   [MustahikController::class, 'update']);
+    Route::delete('/mustahik/{mustahik}',[MustahikController::class, 'destroy']);
+
+    // ——————————————————————————
+    // Program Routes
+    // ——————————————————————————
+    Route::get('/program/options',     [ProgramController::class, 'options']);
+    Route::get('/program',             [ProgramController::class, 'index']);
+    Route::post('/program',            [ProgramController::class, 'store']);
+    Route::put('/program/{program}',   [ProgramController::class, 'update']);
+    Route::delete('/program/{program}',[ProgramController::class, 'destroy']);
 
     // ——————————————————————————
     // Transaksi Routes

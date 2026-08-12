@@ -21,6 +21,8 @@ class Transaksi extends Model
         'tahun',
         'bulan',
         'muzakki_id',
+        'mustahik_id',
+        'program_id',
     ];
 
     protected $casts = [
@@ -32,5 +34,15 @@ class Transaksi extends Model
     public function muzakki()
     {
         return $this->belongsTo(Muzakki::class);
+    }
+
+    public function mustahik()
+    {
+        return $this->belongsTo(Mustahik::class);
+    }
+
+    public function program()
+    {
+        return $this->belongsTo(ProgramPenyaluran::class, 'program_id');
     }
 }

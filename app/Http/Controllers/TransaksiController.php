@@ -57,12 +57,12 @@ class TransaksiController extends Controller
      */
     public function indexPenyaluran(Request $request)
     {
-        $query = Transaksi::with('muzakki')
+        $query = Transaksi::with(['mustahik', 'program'])
             ->where('jenis', 'keluar')
             ->when($request->search, function ($q) use ($request) {
                 $q->where(function ($inner) use ($request) {
                     $inner->where('kode', 'ilike', "%{$request->search}%")
-                          ->orWhereHas('muzakki', fn($m) => $m->where('nama', 'ilike', "%{$request->search}%"));
+                          ->orWhereHas('mustahik', fn($m) => $m->where('nama', 'ilike', "%{$request->search}%"));
                 });
             })
             ->orderByDesc('created_at');
@@ -75,7 +75,8 @@ class TransaksiController extends Controller
             'data' => $data->map(fn($t) => [
                 'id'       => $t->id,
                 'kode'     => $t->kode,
-                'nama'     => $t->muzakki?->nama ?? 'Anonim',
+                'nama'     => $t->mustahik?->nama ?? 'Tidak Diketahui',
+                'program'  => $t->program?->nama ?? '-',
                 'nominal'  => $t->nominal,
                 'metode'   => $t->metode,
                 'tanggal'  => $t->created_at->toDateTimeString(),
@@ -128,19 +129,26 @@ class TransaksiController extends Controller
     public function storePenyaluran(Request $request)
     {
         $validated = $request->validate([
-            'muzakki_id' => 'nullable|exists:muzakki,id',
+            'mustahik_id'=> 'nullable|exists:mustahik,id',
+            'program_id' => 'nullable|exists:program_penyaluran,id',
             'nominal'    => 'required|integer|min:1',
             'metode'     => 'nullable|string|max:50',
-            'asnaf'      => 'nullable|string|max:50',
-            'program'    => 'nullable|string|max:100',
             'keterangan' => 'nullable|string|max:255',
         ]);
 
         $now  = now();
         $kode = 'TRX-K-' . strtoupper(Str::random(6));
 
-        $desc = $validated['keterangan']
-            ?? ('Penyaluran' . ($validated['program'] ? ' – ' . $validated['program'] : ''));
+        $desc = $validated['keterangan'] ?? null;
+        if (!$desc) {
+            $desc = 'Penyaluran';
+            if (!empty($validated['program_id'])) {
+                $program = \App\Models\ProgramPenyaluran::find($validated['program_id']);
+                if ($program) {
+                    $desc .= ' – ' . $program->nama;
+                }
+            }
+        }
 
         $transaksi = Transaksi::create([
             'kode'       => $kode,
@@ -151,9 +159,10 @@ class TransaksiController extends Controller
             'metode'     => $validated['metode'] ?? null,
             'tahun'      => $now->year,
             'bulan'      => $now->month,
-            'muzakki_id' => $validated['muzakki_id'] ?? null,
+            'mustahik_id'=> $validated['mustahik_id'] ?? null,
+            'program_id' => $validated['program_id'] ?? null,
         ]);
 
-        return response()->json($transaksi->load('muzakki'), 201);
+        return response()->json($transaksi->load(['mustahik', 'program']), 201);
     }
 }

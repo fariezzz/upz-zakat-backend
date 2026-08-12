@@ -115,7 +115,6 @@ class DashboardController extends Controller
         ];
 
         $query = Transaksi::where('jenis', 'masuk')
-            ->whereIn('kategori', array_keys($kategoriColors))
             ->select('kategori', DB::raw('SUM(nominal) as total'))
             ->groupBy('kategori');
 
@@ -123,17 +122,39 @@ class DashboardController extends Controller
             $query->where('tahun', $tahun);
         }
 
-        $rows       = $query->get();
-        $grandTotal = $rows->sum('total');
+        $rows = $query->get();
 
-        return $rows->map(function ($row) use ($kategoriColors, $grandTotal) {
-            return [
-                'name'    => $row->kategori,
-                'value'   => (int) $row->total,
-                'percent' => $grandTotal > 0 ? round(($row->total / $grandTotal) * 100, 1) : 0,
-                'color'   => $kategoriColors[$row->kategori] ?? '#94a3b8',
+        $groupedData = [
+            'Zakat'        => 0,
+            'Infaq'        => 0,
+            'Sedekah'      => 0,
+            'Dana Lainnya' => 0,
+        ];
+
+        foreach ($rows as $row) {
+            $cat = $row->kategori;
+            if (stripos($cat, 'Zakat') !== false) {
+                $groupedData['Zakat'] += $row->total;
+            } elseif (isset($groupedData[$cat])) {
+                $groupedData[$cat] += $row->total;
+            } else {
+                $groupedData['Dana Lainnya'] += $row->total;
+            }
+        }
+
+        $grandTotal = array_sum($groupedData);
+        $result = [];
+
+        foreach ($groupedData as $name => $total) {
+            $result[] = [
+                'name'    => $name,
+                'value'   => (int) $total,
+                'percent' => $grandTotal > 0 ? round(($total / $grandTotal) * 100, 1) : 0,
+                'color'   => $kategoriColors[$name],
             ];
-        })->values()->toArray();
+        }
+
+        return $result;
     }
 
     private function buildGrafik($tahun): array
@@ -200,7 +221,7 @@ class DashboardController extends Controller
     {
         $isAll = ($tahun === 'all');
 
-        $query = ProgramPenyaluran::where('status', $status);
+        $query = ProgramPenyaluran::with('transaksi')->where('status', $status);
         if (!$isAll) {
             $query->where('tahun', $tahun);
         }
@@ -208,9 +229,9 @@ class DashboardController extends Controller
         return $query->get()->map(fn($prog) => [
             'id'       => $prog->kode,
             'nama'     => $prog->nama,
-            'penerima' => (int) $prog->jumlah_penerima,
-            'nominal'  => (int) $prog->nominal_disalurkan,
-            'progress' => $prog->progress,
+            'penerima' => $prog->jumlah_penerima,   // computed dari transaksi
+            'nominal'  => $prog->nominal_disalurkan, // computed dari transaksi
+            'progress' => $prog->progress,           // computed dari transaksi
         ])->toArray();
     }
 

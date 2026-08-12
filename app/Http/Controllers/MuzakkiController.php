@@ -33,10 +33,12 @@ class MuzakkiController extends Controller
         return response()->json([
             'data'  => $data->items(),
             'meta'  => [
-                'current_page' => $data->currentPage(),
-                'last_page'    => $data->lastPage(),
-                'per_page'     => $data->perPage(),
-                'total'        => $data->total(),
+                'current_page'      => $data->currentPage(),
+                'last_page'         => $data->lastPage(),
+                'per_page'          => $data->perPage(),
+                'total'             => $data->total(),
+                'total_aktif'       => Muzakki::where('status', 'aktif')->count(),
+                'total_tidak_aktif' => Muzakki::where('status', '!=', 'aktif')->count(),
             ],
         ]);
     }
