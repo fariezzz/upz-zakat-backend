@@ -1,0 +1,22 @@
+.git
+.github
+.env
+.env.*
+! .env.example
+vendor
+node_modules
+npm-debug.log
+yarn-error.log
+storage/*.key
+storage/logs/*
+!storage/logs/.gitkeep
+storage/framework/cache/*
+!storage/framework/cache/.gitkeep
+storage/framework/sessions/*
+!storage/framework/sessions/.gitkeep
+storage/framework/views/*
+!storage/framework/views/.gitkeep
+tests
+.editorconfig
+.gitattributes
+README.md
