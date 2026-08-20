@@ -2,12 +2,20 @@
 
 use App\Http\Controllers\AuthController;
 use App\Http\Controllers\DashboardController;
+use App\Http\Controllers\DonasiController;
+use App\Http\Controllers\LaporanController;
 use App\Http\Controllers\MuzakkiController;
 use App\Http\Controllers\MustahikController;
 use App\Http\Controllers\ProgramController;
 use App\Http\Controllers\TransaksiController;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Route;
+
+// ——————————————————————————————————
+// Public: Donasi Online (tanpa auth)
+// ——————————————————————————————————
+Route::post('/donasi', [DonasiController::class, 'store']);
+
 
 // ——————————————————————————————————
 // Auth Routes (public)
@@ -72,4 +80,14 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::post('/transaksi/pengumpulan', [TransaksiController::class, 'storePengumpulan']);
     Route::get('/transaksi/penyaluran',   [TransaksiController::class, 'indexPenyaluran']);
     Route::post('/transaksi/penyaluran',  [TransaksiController::class, 'storePenyaluran']);
+
+    // ——————————————————————————
+    // Donasi Online (admin view)
+    // ——————————————————————————
+    Route::get('/donasi', [DonasiController::class, 'index']);
+
+    // ——————————————————————————
+    // Laporan Keuangan
+    // ——————————————————————————
+    Route::get('/laporan/ringkasan', [LaporanController::class, 'ringkasan']);
 });
