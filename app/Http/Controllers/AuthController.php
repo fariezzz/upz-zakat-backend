@@ -63,9 +63,67 @@ class AuthController extends Controller
         $user = $request->user();
 
         return response()->json([
+            'id'    => $user->id,
             'name'  => $user->name,
             'email' => $user->email,
             'role'  => $user->role ?? 'administrator',
+            'created_at' => $user->created_at,
+        ]);
+    }
+
+    /**
+     * PUT /api/auth/profile
+     * Header: Authorization: Bearer {token}
+     * Body: { name, email }
+     */
+    public function updateProfile(Request $request)
+    {
+        $user = $request->user();
+
+        $validated = $request->validate([
+            'name'  => 'required|string|max:255',
+            'email' => 'required|email|max:255|unique:users,email,' . $user->id,
+        ]);
+
+        $user->update($validated);
+
+        return response()->json([
+            'message' => 'Profil berhasil diperbarui.',
+            'user'    => [
+                'id'    => $user->id,
+                'name'  => $user->name,
+                'email' => $user->email,
+                'role'  => $user->role ?? 'administrator',
+            ],
+        ]);
+    }
+
+    /**
+     * PUT /api/auth/password
+     * Header: Authorization: Bearer {token}
+     * Body: { current_password, new_password, new_password_confirmation }
+     */
+    public function updatePassword(Request $request)
+    {
+        $user = $request->user();
+
+        $request->validate([
+            'current_password' => 'required|string',
+            'new_password'     => 'required|string|min:6|confirmed',
+        ]);
+
+        if (! Hash::check($request->current_password, $user->password)) {
+            throw ValidationException::withMessages([
+                'current_password' => ['Password saat ini tidak cocok.'],
+            ]);
+        }
+
+        $user->update([
+            'password' => Hash::make($request->new_password),
+        ]);
+
+        return response()->json([
+            'message' => 'Password berhasil diubah.',
         ]);
     }
 }

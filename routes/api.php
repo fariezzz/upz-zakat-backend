@@ -3,6 +3,7 @@
 use App\Http\Controllers\AuthController;
 use App\Http\Controllers\DashboardController;
 use App\Http\Controllers\DonasiController;
+use App\Http\Controllers\JurnalController;
 use App\Http\Controllers\LaporanController;
 use App\Http\Controllers\MuzakkiController;
 use App\Http\Controllers\MustahikController;
@@ -12,9 +13,11 @@ use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Route;
 
 // ——————————————————————————————————
-// Public: Donasi Online (tanpa auth)
+// Public: Halaman Utama (tanpa auth)
 // ——————————————————————————————————
 Route::post('/donasi', [DonasiController::class, 'store']);
+Route::get('/public/program', [ProgramController::class, 'publicList']);
+Route::get('/public/laporan', [LaporanController::class, 'publicReport']);
 
 
 // ——————————————————————————————————
@@ -29,8 +32,10 @@ Route::prefix('auth')->group(function () {
 // ——————————————————————————————————
 Route::middleware('auth:sanctum')->group(function () {
     Route::prefix('auth')->group(function () {
-        Route::post('/logout', [AuthController::class, 'logout']);
-        Route::get('/me',     [AuthController::class, 'me']);
+        Route::post('/logout',          [AuthController::class, 'logout']);
+        Route::get('/me',               [AuthController::class, 'me']);
+        Route::put('/profile',          [AuthController::class, 'updateProfile']);
+        Route::put('/password',         [AuthController::class, 'updatePassword']);
     });
 
     // ——————————————————————————————
@@ -90,4 +95,12 @@ Route::middleware('auth:sanctum')->group(function () {
     // Laporan Keuangan
     // ——————————————————————————
     Route::get('/laporan/ringkasan', [LaporanController::class, 'ringkasan']);
+
+    // ——————————————————————————
+    // Jurnal Akuntansi
+    // ——————————————————————————
+    Route::get('/jurnal',            [JurnalController::class, 'index']);
+    Route::post('/jurnal',           [JurnalController::class, 'store']);
+    Route::put('/jurnal/{jurnal}',   [JurnalController::class, 'update']);
+    Route::delete('/jurnal/{jurnal}',[JurnalController::class, 'destroy']);
 });

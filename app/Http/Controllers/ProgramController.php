@@ -110,6 +110,22 @@ class ProgramController extends Controller
         return response()->json(['message' => 'Program berhasil dihapus.']);
     }
 
+    /**
+     * GET /api/public/program (PUBLIC — tanpa auth)
+     */
+    public function publicList(Request $request)
+    {
+        $programs = ProgramPenyaluran::with('transaksi')
+            ->where('status', 'aktif')
+            ->orderByDesc('tahun')
+            ->orderBy('kode')
+            ->get();
+
+        return response()->json([
+            'data' => $programs->map(fn($p) => $this->fmt($p)),
+        ]);
+    }
+
     // ── Helper ─────────────────────────────────────────────────────────────────
     private function fmt(ProgramPenyaluran $p): array
     {
