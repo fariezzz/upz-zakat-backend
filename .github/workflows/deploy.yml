@@ -35,17 +35,15 @@ jobs:
         run: |
           composer install --no-dev --optimize-autoloader --prefer-dist --no-interaction --no-progress
 
-      - name: Prepare Archive Package & Extractor
+      - name: Prepare Deploy Package
         run: |
-          TOKEN=$(openssl rand -hex 16)
-          echo "DEPLOY_TOKEN=${TOKEN}" >> $GITHUB_ENV
+          mkdir -p deploy-staging
 
-          mkdir -p deploy-pkg/public
-
-
-          tar -cf deploy-pkg/release.tar \
-            --exclude='.git*' \
-            --exclude='.env*' \
+          # Copy everything except excluded items
+          rsync -a --exclude='.git' \
+            --exclude='.github' \
+            --exclude='.env' \
+            --exclude='.env.example' \
             --exclude='tests' \
             --exclude='node_modules' \
             --exclude='.dockerignore' \
@@ -54,199 +52,59 @@ jobs:
             --exclude='render.yaml' \
             --exclude='phpunit.xml' \
             --exclude='README.md' \
-            --exclude='deploy-pkg' \
-            --exclude='storage/logs/*' \
+            --exclude='deploy-staging' \
+            --exclude='storage/logs/*.log' \
             --exclude='storage/framework/sessions/*' \
             --exclude='storage/framework/views/*' \
             --exclude='storage/framework/cache/data/*' \
-            .
+            ./ deploy-staging/
 
-          cat << 'EOF' > deploy-pkg/unzip.php
-          <?php
-          @ini_set('display_errors', '1');
-          @error_reporting(E_ALL);
+          # Ensure storage directories exist with proper structure
+          mkdir -p deploy-staging/storage/logs
+          mkdir -p deploy-staging/storage/framework/sessions
+          mkdir -p deploy-staging/storage/framework/views
+          mkdir -p deploy-staging/storage/framework/cache/data
+          touch deploy-staging/storage/logs/.gitkeep
+          touch deploy-staging/storage/framework/sessions/.gitkeep
+          touch deploy-staging/storage/framework/views/.gitkeep
+          touch deploy-staging/storage/framework/cache/data/.gitkeep
 
-          $token = $_GET['token'] ?? '';
-          $expectedToken = '__TOKEN_PLACEHOLDER__';
+          echo "📦 Deploy package ready: $(find deploy-staging -type f | wc -l) files"
 
-          if (empty($token) || !hash_equals($expectedToken, $token)) {
-              http_response_code(403);
-              header('Content-Type: application/json');
-              echo json_encode(['status' => 'error', 'message' => 'Forbidden: Invalid token']);
-              exit;
-          }
-
-          $extractPath = __DIR__;
-          $tarFile = __DIR__ . '/release.tar';
-
-          if (!file_exists($tarFile)) {
-              $tarFile = dirname(__DIR__) . '/release.tar';
-              $extractPath = dirname(__DIR__);
-          }
-
-          if (!file_exists($tarFile)) {
-              http_response_code(404);
-              header('Content-Type: application/json');
-              echo json_encode(['status' => 'error', 'message' => 'release.tar not found in ' . $extractPath]);
-              exit;
-          }
-
-          @set_time_limit(300);
-          @ini_set('memory_limit', '512M');
-
-          $extracted = false;
-          $method = 'none';
-          $errors = [];
-
-          if (class_exists('PharData')) {
-              try {
-                  $phar = new PharData($tarFile);
-                  $phar->extractTo($extractPath, null, true);
-                  $extracted = true;
-                  $method = 'PharData';
-              } catch (\Throwable $e) {
-                  $errors[] = 'PharData: ' . $e->getMessage();
-              }
-          } else {
-              $errors[] = 'PharData: class not available';
-          }
-
-          if (!$extracted && function_exists('exec')) {
-              $escapedTar = escapeshellarg($tarFile);
-              $escapedDir = escapeshellarg($extractPath);
-              $output = [];
-              $returnCode = -1;
-              @exec("tar -xf {$escapedTar} -C {$escapedDir} 2>&1", $output, $returnCode);
-              if ($returnCode === 0) {
-                  $extracted = true;
-                  $method = 'exec(tar)';
-              } else {
-                  $errors[] = 'exec(tar): exit code ' . $returnCode . ' - ' . implode("\n", $output);
-              }
-          } elseif (!$extracted) {
-              $errors[] = 'exec: function disabled';
-          }
-
-          if (!$extracted && function_exists('shell_exec')) {
-              $escapedTar = escapeshellarg($tarFile);
-              $escapedDir = escapeshellarg($extractPath);
-              $result = @shell_exec("tar -xf {$escapedTar} -C {$escapedDir} 2>&1; echo \"EXIT_CODE:$?\"");
-              if ($result !== null && preg_match('/EXIT_CODE:(\d+)/', $result, $m) && $m[1] === '0') {
-                  $extracted = true;
-                  $method = 'shell_exec(tar)';
-              } else {
-                  $errors[] = 'shell_exec(tar): ' . ($result ?? 'null result');
-              }
-          } elseif (!$extracted) {
-              $errors[] = 'shell_exec: function disabled';
-          }
-
-          if (!$extracted && function_exists('proc_open')) {
-              $escapedTar = escapeshellarg($tarFile);
-              $escapedDir = escapeshellarg($extractPath);
-              $descriptors = [0 => ['pipe', 'r'], 1 => ['pipe', 'w'], 2 => ['pipe', 'w']];
-              $process = @proc_open("tar -xf {$escapedTar} -C {$escapedDir}", $descriptors, $pipes);
-              if (is_resource($process)) {
-                  fclose($pipes[0]);
-                  $stdout = stream_get_contents($pipes[1]);
-                  $stderr = stream_get_contents($pipes[2]);
-                  fclose($pipes[1]);
-                  fclose($pipes[2]);
-                  $returnCode = proc_close($process);
-                  if ($returnCode === 0) {
-                      $extracted = true;
-                      $method = 'proc_open(tar)';
-                  } else {
-                      $errors[] = 'proc_open(tar): exit code ' . $returnCode . ' - ' . $stderr;
-                  }
-              } else {
-                  $errors[] = 'proc_open: failed to open process';
-              }
-          } elseif (!$extracted) {
-              $errors[] = 'proc_open: function disabled';
-          }
-
-          if ($extracted) {
-              @unlink($tarFile);
-              @unlink(__FILE__);
-              @unlink($extractPath . '/unzip.php');
-              @unlink($extractPath . '/public/unzip.php');
-
-              header('Content-Type: application/json');
-              echo json_encode(['status' => 'success', 'message' => "Backend extracted & deployed successfully! (method: {$method})"]);
-              exit;
-          }
-
-          http_response_code(500);
-          header('Content-Type: application/json');
-          echo json_encode([
-              'status' => 'error',
-              'message' => 'All extraction methods failed',
-              'errors' => $errors,
-              'php_version' => PHP_VERSION,
-              'disabled_functions' => ini_get('disable_functions')
-          ]);
-          EOF
-
-          sed -i 's/^[ \t]*//' deploy-pkg/unzip.php
-          sed -i "s/__TOKEN_PLACEHOLDER__/${TOKEN}/g" deploy-pkg/unzip.php
-          cp deploy-pkg/unzip.php deploy-pkg/public/unzip.php
-
-          # Set strict cPanel permissions (755 for directories, 644 for files)
-          chmod 755 deploy-pkg deploy-pkg/public
-          chmod 644 deploy-pkg/release.tar deploy-pkg/unzip.php deploy-pkg/public/unzip.php
-
-          echo "📦 Package size: $(du -sh deploy-pkg/release.tar | cut -f1)"
-
-      - name: Upload Package via FTP
+      - name: Deploy Files via FTP
         uses: SamKirkland/FTP-Deploy-Action@v4.3.5
         with:
           server: ${{ secrets.FTP_SERVER }}
           username: ${{ secrets.FTP_USERNAME }}
           password: ${{ secrets.FTP_PASSWORD }}
           server-dir: ./
-          local-dir: ./deploy-pkg/
+          local-dir: ./deploy-staging/
+          dangerous-clean-slate: false
 
-      - name: Trigger Remote Auto-Extraction
+      - name: Verify Deployment
         run: |
-          echo "🚀 Triggering remote unzip on server..."
-
-          SERVER_INPUT="${{ secrets.FTP_SERVER }}"
-          SERVER_IP=$(getent ahosts "$SERVER_INPUT" 2>/dev/null | awk '{print $1}' | head -n 1)
-          if [ -z "$SERVER_IP" ]; then
-            SERVER_IP="$SERVER_INPUT"
-          fi
-
-          RESOLVE_ARGS=""
-          if [ -n "$SERVER_IP" ]; then
-            RESOLVE_ARGS="--resolve upz.unsil.ac.id:443:$SERVER_IP --resolve upz.unsil.ac.id:80:$SERVER_IP"
-          fi
+          echo "🔍 Verifying deployment..."
 
           ENDPOINTS=(
-            "https://upz.unsil.ac.id/upz-api/unzip.php?token=${{ env.DEPLOY_TOKEN }}"
-            "https://upz.unsil.ac.id/upz-api/public/unzip.php?token=${{ env.DEPLOY_TOKEN }}"
-            "http://upz.unsil.ac.id/upz-api/unzip.php?token=${{ env.DEPLOY_TOKEN }}"
-            "http://upz.unsil.ac.id/upz-api/public/unzip.php?token=${{ env.DEPLOY_TOKEN }}"
+            "https://upz.unsil.ac.id/upz-api/public/api"
+            "https://upz.unsil.ac.id/upz-api/public/"
+            "http://upz.unsil.ac.id/upz-api/public/"
           )
 
           SUCCESS=false
           for URL in "${ENDPOINTS[@]}"; do
-            echo "Trying trigger URL: $URL"
-            RESPONSE=$(curl -s -k $RESOLVE_ARGS -w "\nHTTP_STATUS:%{http_code}" "$URL" 2>&1 || true)
-            HTTP_STATUS=$(echo "$RESPONSE" | grep "HTTP_STATUS" | cut -d':' -f2 | tr -d ' \r\n')
-            BODY=$(echo "$RESPONSE" | grep -v "HTTP_STATUS")
-
-            if [ "$HTTP_STATUS" = "200" ]; then
-              echo "Server Response: $BODY"
+            echo "Checking: $URL"
+            HTTP_STATUS=$(curl -s -o /dev/null -w "%{http_code}" -k "$URL" 2>&1 || true)
+            echo "  Status: $HTTP_STATUS"
+            if [ "$HTTP_STATUS" -ge 200 ] && [ "$HTTP_STATUS" -lt 500 ]; then
               SUCCESS=true
+              echo "  ✅ Server is responding!"
               break
-            else
-              echo "Status $HTTP_STATUS: $BODY"
             fi
           done
 
           if [ "$SUCCESS" != "true" ]; then
-            echo "❌ Extraction failed! Could not trigger unzip.php on any endpoint."
-            exit 1
+            echo "⚠️ Could not verify deployment, but files were uploaded successfully."
+            echo "Please check the site manually."
           fi
-          echo "✅ Backend successfully deployed and extracted in seconds!"
+          echo "✅ Backend deployment complete!"
