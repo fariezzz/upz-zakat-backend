@@ -121,13 +121,38 @@ jobs:
       - name: Trigger Remote Auto-Extraction
         run: |
           echo "🚀 Triggering remote unzip on server..."
-          RESPONSE=$(curl -s -w "\nHTTP_STATUS:%{http_code}" "https://api.upz.unsil.ac.id/unzip.php?token=${{ env.DEPLOY_TOKEN }}")
-          HTTP_STATUS=$(echo "$RESPONSE" | grep "HTTP_STATUS" | cut -d':' -f2)
-          BODY=$(echo "$RESPONSE" | grep -v "HTTP_STATUS")
 
-          echo "Server Response: $BODY"
-          if [ "$HTTP_STATUS" -ne 200 ]; then
-            echo "❌ Extraction failed with status $HTTP_STATUS"
+          SERVER_INPUT="${{ secrets.FTP_SERVER }}"
+          SERVER_IP=$(getent ahosts "$SERVER_INPUT" 2>/dev/null | awk '{print $1}' | head -n 1)
+          if [ -z "$SERVER_IP" ]; then
+            SERVER_IP="$SERVER_INPUT"
+          fi
+
+          RESOLVE_ARGS=""
+          if [ -n "$SERVER_IP" ]; then
+            echo "Using target server IP: $SERVER_IP"
+            RESOLVE_ARGS="--resolve api.upz.unsil.ac.id:443:$SERVER_IP --resolve api.upz.unsil.ac.id:80:$SERVER_IP"
+          fi
+
+          SUCCESS=false
+          for i in {1..3}; do
+            echo "Attempt $i to trigger unzip..."
+            RESPONSE=$(curl -s -k $RESOLVE_ARGS -w "\nHTTP_STATUS:%{http_code}" "https://api.upz.unsil.ac.id/unzip.php?token=${{ env.DEPLOY_TOKEN }}" 2>&1 || true)
+            HTTP_STATUS=$(echo "$RESPONSE" | grep "HTTP_STATUS" | cut -d':' -f2 | tr -d ' \r\n')
+            BODY=$(echo "$RESPONSE" | grep -v "HTTP_STATUS")
+
+            if [ "$HTTP_STATUS" = "200" ]; then
+              echo "Server Response: $BODY"
+              SUCCESS=true
+              break
+            fi
+
+            echo "Attempt $i failed (Status: $HTTP_STATUS, Output: $BODY). Retrying in 3s..."
+            sleep 3
+          done
+
+          if [ "$SUCCESS" != "true" ]; then
+            echo "❌ Extraction failed! Could not reach https://api.upz.unsil.ac.id/unzip.php"
             exit 1
           fi
           echo "✅ Backend successfully deployed and extracted in seconds!"
