@@ -35,27 +35,99 @@ jobs:
         run: |
           composer install --no-dev --optimize-autoloader --prefer-dist --no-interaction --no-progress
 
-      - name: Deploy to cPanel via FTP
+      - name: Prepare Zip Package & Extractor
+        run: |
+          # Generate random one-time secure deploy token
+          TOKEN=$(openssl rand -hex 16)
+          echo "DEPLOY_TOKEN=${TOKEN}" >> $GITHUB_ENV
+
+          # Create deploy package folder structure
+          mkdir -p deploy-pkg/public
+
+          # Compress all Laravel files into release.zip
+          zip -r deploy-pkg/release.zip . \
+            -x ".git*" \
+            -x ".git*/**" \
+            -x ".env*" \
+            -x "tests/**" \
+            -x "node_modules/**" \
+            -x ".dockerignore" \
+            -x "Dockerfile" \
+            -x "docker/**" \
+            -x "render.yaml" \
+            -x "phpunit.xml" \
+            -x "README.md" \
+            -x "deploy-pkg/**" \
+            -x "storage/logs/*" \
+            -x "storage/framework/sessions/*" \
+            -x "storage/framework/views/*" \
+            -x "storage/framework/cache/data/*"
+
+          # Create secure auto-extractor script in public/
+          cat << 'EOF' > deploy-pkg/public/unzip.php
+          <?php
+          $token = $_GET['token'] ?? '';
+          $expectedToken = '__TOKEN_PLACEHOLDER__';
+
+          if (empty($token) || !hash_equals($expectedToken, $token)) {
+              http_response_code(403);
+              header('Content-Type: application/json');
+              echo json_encode(['status' => 'error', 'message' => 'Forbidden: Invalid token']);
+              exit;
+          }
+
+          $zipFile = dirname(__DIR__) . '/release.zip';
+          $extractPath = dirname(__DIR__);
+
+          if (!file_exists($zipFile)) {
+              http_response_code(404);
+              header('Content-Type: application/json');
+              echo json_encode(['status' => 'error', 'message' => 'release.zip not found']);
+              exit;
+          }
+
+          $zip = new ZipArchive();
+          if ($zip->open($zipFile) === TRUE) {
+              $zip->extractTo($extractPath);
+              $zip->close();
+
+              // Auto cleanup zip and extractor script
+              @unlink($zipFile);
+              @unlink(__FILE__);
+
+              header('Content-Type: application/json');
+              echo json_encode(['status' => 'success', 'message' => 'Extracted & deployed successfully!']);
+          } else {
+              http_response_code(500);
+              header('Content-Type: application/json');
+              echo json_encode(['status' => 'error', 'message' => 'Failed to extract release.zip']);
+          }
+          EOF
+
+          # Remove leading spaces from generated PHP file
+          sed -i 's/^[ \t]*//' deploy-pkg/public/unzip.php
+          sed -i "s/__TOKEN_PLACEHOLDER__/${TOKEN}/g" deploy-pkg/public/unzip.php
+          echo "📦 Package size: $(du -sh deploy-pkg/release.zip | cut -f1)"
+
+      - name: Upload Package via FTP (Only 2 Files!)
         uses: SamKirkland/FTP-Deploy-Action@v4.3.5
         with:
           server: ${{ secrets.FTP_SERVER }}
           username: ${{ secrets.FTP_USERNAME }}
           password: ${{ secrets.FTP_PASSWORD }}
           server-dir: ./
-          local-dir: ./
-          exclude: |
-            **/.git*
-            **/.git*/**
-            **/.env*
-            tests/**
-            node_modules/**
-            .dockerignore
-            Dockerfile
-            docker/**
-            render.yaml
-            phpunit.xml
-            README.md
-            storage/logs/*
-            storage/framework/sessions/*
-            storage/framework/views/*
-            storage/framework/cache/data/*
+          local-dir: ./deploy-pkg/
+
+      - name: Trigger Remote Auto-Extraction
+        run: |
+          echo "🚀 Triggering remote unzip on server..."
+          RESPONSE=$(curl -s -w "\nHTTP_STATUS:%{http_code}" "https://api.upz.unsil.ac.id/unzip.php?token=${{ env.DEPLOY_TOKEN }}")
+          HTTP_STATUS=$(echo "$RESPONSE" | grep "HTTP_STATUS" | cut -d':' -f2)
+          BODY=$(echo "$RESPONSE" | grep -v "HTTP_STATUS")
+
+          echo "Server Response: $BODY"
+          if [ "$HTTP_STATUS" -ne 200 ]; then
+            echo "❌ Extraction failed with status $HTTP_STATUS"
+            exit 1
+          fi
+          echo "✅ Backend successfully deployed and extracted in seconds!"
