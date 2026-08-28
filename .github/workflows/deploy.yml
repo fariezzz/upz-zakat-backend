@@ -35,30 +35,31 @@ jobs:
         run: |
           composer install --no-dev --optimize-autoloader --prefer-dist --no-interaction --no-progress
 
-      - name: Prepare Zip Package & Extractor
+      - name: Prepare Archive Package & Extractor
         run: |
           TOKEN=$(openssl rand -hex 16)
           echo "DEPLOY_TOKEN=${TOKEN}" >> $GITHUB_ENV
 
           mkdir -p deploy-pkg/public
 
-          zip -r deploy-pkg/release.zip . \
-            -x ".git*" \
-            -x ".git*/**" \
-            -x ".env*" \
-            -x "tests/**" \
-            -x "node_modules/**" \
-            -x ".dockerignore" \
-            -x "Dockerfile" \
-            -x "docker/**" \
-            -x "render.yaml" \
-            -x "phpunit.xml" \
-            -x "README.md" \
-            -x "deploy-pkg/**" \
-            -x "storage/logs/*" \
-            -x "storage/framework/sessions/*" \
-            -x "storage/framework/views/*" \
-            -x "storage/framework/cache/data/*"
+
+          tar -czf deploy-pkg/release.tar.gz \
+            --exclude='.git*' \
+            --exclude='.env*' \
+            --exclude='tests' \
+            --exclude='node_modules' \
+            --exclude='.dockerignore' \
+            --exclude='Dockerfile' \
+            --exclude='docker' \
+            --exclude='render.yaml' \
+            --exclude='phpunit.xml' \
+            --exclude='README.md' \
+            --exclude='deploy-pkg' \
+            --exclude='storage/logs/*' \
+            --exclude='storage/framework/sessions/*' \
+            --exclude='storage/framework/views/*' \
+            --exclude='storage/framework/cache/data/*' \
+            .
 
           cat << 'EOF' > deploy-pkg/unzip.php
           <?php
@@ -75,48 +76,50 @@ jobs:
               exit;
           }
 
-          $zipFile = __DIR__ . '/release.zip';
           $extractPath = __DIR__;
+          $tarFile = __DIR__ . '/release.tar.gz';
 
-          if (!file_exists($zipFile)) {
-              $zipFile = dirname(__DIR__) . '/release.zip';
+          if (!file_exists($tarFile)) {
+              $tarFile = dirname(__DIR__) . '/release.tar.gz';
               $extractPath = dirname(__DIR__);
           }
 
-          if (!file_exists($zipFile)) {
+          if (!file_exists($tarFile)) {
               http_response_code(404);
               header('Content-Type: application/json');
-              echo json_encode(['status' => 'error', 'message' => 'release.zip not found in ' . $extractPath]);
+              echo json_encode(['status' => 'error', 'message' => 'release.tar.gz not found in ' . $extractPath]);
               exit;
           }
 
-          if (!class_exists('ZipArchive')) {
-              http_response_code(500);
-              header('Content-Type: application/json');
-              echo json_encode(['status' => 'error', 'message' => 'PHP ZipArchive extension is not enabled in cPanel']);
-              exit;
+          @set_time_limit(300);
+          @ini_set('memory_limit', '512M');
+
+          $extracted = false;
+
+          if (class_exists('PharData')) {
+              try {
+                  $phar = new PharData($tarFile);
+                  $phar->extractTo($extractPath, null, true);
+                  $extracted = true;
+                  @unlink($tarFile);
+              } catch (\Throwable $e) {
+                  $extracted = false;
+              }
           }
 
-          $zip = new ZipArchive();
-          $res = $zip->open($zipFile);
-          if ($res === TRUE) {
-              @set_time_limit(300);
-              @ini_set('memory_limit', '512M');
-              $zip->extractTo($extractPath);
-              $zip->close();
-
-              @unlink($zipFile);
+          if ($extracted) {
               @unlink(__FILE__);
               @unlink($extractPath . '/unzip.php');
               @unlink($extractPath . '/public/unzip.php');
 
               header('Content-Type: application/json');
-              echo json_encode(['status' => 'success', 'message' => 'Extracted & deployed successfully!']);
-          } else {
-              http_response_code(500);
-              header('Content-Type: application/json');
-              echo json_encode(['status' => 'error', 'message' => 'Failed to extract release.zip, error code: ' . $res]);
+              echo json_encode(['status' => 'success', 'message' => 'Backend extracted & deployed successfully!']);
+              exit;
           }
+
+          http_response_code(500);
+          header('Content-Type: application/json');
+          echo json_encode(['status' => 'error', 'message' => 'Failed to extract package. Please check PHP permissions.']);
           EOF
 
           sed -i 's/^[ \t]*//' deploy-pkg/unzip.php
@@ -125,9 +128,9 @@ jobs:
 
           # Set strict cPanel permissions (755 for directories, 644 for files)
           chmod 755 deploy-pkg deploy-pkg/public
-          chmod 644 deploy-pkg/release.zip deploy-pkg/unzip.php deploy-pkg/public/unzip.php
+          chmod 644 deploy-pkg/release.tar.gz deploy-pkg/unzip.php deploy-pkg/public/unzip.php
 
-          echo "📦 Package size: $(du -sh deploy-pkg/release.zip | cut -f1)"
+          echo "📦 Package size: $(du -sh deploy-pkg/release.tar.gz | cut -f1)"
 
       - name: Upload Package via FTP
         uses: SamKirkland/FTP-Deploy-Action@v4.3.5
