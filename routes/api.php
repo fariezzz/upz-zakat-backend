@@ -9,6 +9,7 @@ use App\Http\Controllers\MuzakkiController;
 use App\Http\Controllers\MustahikController;
 use App\Http\Controllers\ProgramController;
 use App\Http\Controllers\TransaksiController;
+use App\Http\Controllers\UserController;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Route;
 
@@ -103,4 +104,12 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::post('/jurnal',           [JurnalController::class, 'store']);
     Route::put('/jurnal/{jurnal}',   [JurnalController::class, 'update']);
     Route::delete('/jurnal/{jurnal}',[JurnalController::class, 'destroy']);
+
+    // ——————————————————————————
+    // Manajemen Pengguna (Admin only)
+    // ——————————————————————————
+    Route::get('/users',             [UserController::class, 'index']);
+    Route::post('/users',            [UserController::class, 'store']);
+    Route::put('/users/{user}',      [UserController::class, 'update']);
+    Route::delete('/users/{user}',   [UserController::class, 'destroy']);
 });
