@@ -1,0 +1,59 @@
+name: Deploy Backend to cPanel
+
+on:
+  push:
+    branches: [ main ]
+  workflow_dispatch:
+
+jobs:
+  build-and-deploy:
+    name: Build & Deploy Laravel
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
+
+      - name: Setup PHP
+        uses: shivammathur/setup-php@v2
+        with:
+          php-version: '8.2'
+          extensions: mbstring, xml, ctype, iconv, intl, pdo_mysql, mysqli, pdo_pgsql, pgsql, bcmath, curl, zip, tokenizer, fileinfo
+          coverage: none
+          tools: composer:v2
+
+      - name: Cache Composer dependencies
+        uses: actions/cache@v4
+        with:
+          path: /tmp/composer-cache
+          key: ${{ runner.os }}-composer-${{ hashFiles('**/composer.lock') }}
+          restore-keys: ${{ runner.os }}-composer-
+
+      - name: Install Composer Dependencies
+        run: |
+          composer install --no-dev --optimize-autoloader --prefer-dist --no-interaction --no-progress
+
+      - name: Deploy to cPanel via FTP
+        uses: SamKirkland/FTP-Deploy-Action@v4.3.5
+        with:
+          server: ${{ secrets.FTP_SERVER }}
+          username: ${{ secrets.FTP_USERNAME }}
+          password: ${{ secrets.FTP_PASSWORD }}
+          server-dir: ./
+          local-dir: ./
+          exclude: |
+            **/.git*
+            **/.git*/**
+            **/.env*
+            tests/**
+            node_modules/**
+            .dockerignore
+            Dockerfile
+            docker/**
+            render.yaml
+            phpunit.xml
+            README.md
+            storage/logs/*
+            storage/framework/sessions/*
+            storage/framework/views/*
+            storage/framework/cache/data/*
