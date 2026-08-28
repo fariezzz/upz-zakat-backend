@@ -37,14 +37,11 @@ jobs:
 
       - name: Prepare Zip Package & Extractor
         run: |
-          # Generate random one-time secure deploy token
           TOKEN=$(openssl rand -hex 16)
           echo "DEPLOY_TOKEN=${TOKEN}" >> $GITHUB_ENV
 
-          # Create deploy package folder structure
           mkdir -p deploy-pkg/public
 
-          # Compress all Laravel files into release.zip
           zip -r deploy-pkg/release.zip . \
             -x ".git*" \
             -x ".git*/**" \
@@ -63,8 +60,7 @@ jobs:
             -x "storage/framework/views/*" \
             -x "storage/framework/cache/data/*"
 
-          # Create secure auto-extractor script in public/
-          cat << 'EOF' > deploy-pkg/public/unzip.php
+          cat << 'EOF' > deploy-pkg/unzip.php
           <?php
           $token = $_GET['token'] ?? '';
           $expectedToken = '__TOKEN_PLACEHOLDER__';
@@ -76,8 +72,13 @@ jobs:
               exit;
           }
 
-          $zipFile = dirname(__DIR__) . '/release.zip';
-          $extractPath = dirname(__DIR__);
+          $zipFile = __DIR__ . '/release.zip';
+          $extractPath = __DIR__;
+
+          if (!file_exists($zipFile)) {
+              $zipFile = dirname(__DIR__) . '/release.zip';
+              $extractPath = dirname(__DIR__);
+          }
 
           if (!file_exists($zipFile)) {
               http_response_code(404);
@@ -91,9 +92,10 @@ jobs:
               $zip->extractTo($extractPath);
               $zip->close();
 
-              // Auto cleanup zip and extractor script
               @unlink($zipFile);
               @unlink(__FILE__);
+              @unlink($extractPath . '/unzip.php');
+              @unlink($extractPath . '/public/unzip.php');
 
               header('Content-Type: application/json');
               echo json_encode(['status' => 'success', 'message' => 'Extracted & deployed successfully!']);
@@ -104,12 +106,13 @@ jobs:
           }
           EOF
 
-          # Remove leading spaces from generated PHP file
-          sed -i 's/^[ \t]*//' deploy-pkg/public/unzip.php
-          sed -i "s/__TOKEN_PLACEHOLDER__/${TOKEN}/g" deploy-pkg/public/unzip.php
+          sed -i 's/^[ \t]*//' deploy-pkg/unzip.php
+          sed -i "s/__TOKEN_PLACEHOLDER__/${TOKEN}/g" deploy-pkg/unzip.php
+          cp deploy-pkg/unzip.php deploy-pkg/public/unzip.php
+
           echo "📦 Package size: $(du -sh deploy-pkg/release.zip | cut -f1)"
 
-      - name: Upload Package via FTP (Only 2 Files!)
+      - name: Upload Package via FTP
         uses: SamKirkland/FTP-Deploy-Action@v4.3.5
         with:
           server: ${{ secrets.FTP_SERVER }}
@@ -130,14 +133,20 @@ jobs:
 
           RESOLVE_ARGS=""
           if [ -n "$SERVER_IP" ]; then
-            echo "Using target server IP: $SERVER_IP"
-            RESOLVE_ARGS="--resolve api.upz.unsil.ac.id:443:$SERVER_IP --resolve api.upz.unsil.ac.id:80:$SERVER_IP"
+            RESOLVE_ARGS="--resolve upz.unsil.ac.id:443:$SERVER_IP --resolve upz.unsil.ac.id:80:$SERVER_IP"
           fi
 
+          ENDPOINTS=(
+            "https://upz.unsil.ac.id/upz-api/unzip.php?token=${{ env.DEPLOY_TOKEN }}"
+            "https://upz.unsil.ac.id/upz-api/public/unzip.php?token=${{ env.DEPLOY_TOKEN }}"
+            "http://upz.unsil.ac.id/upz-api/unzip.php?token=${{ env.DEPLOY_TOKEN }}"
+            "http://upz.unsil.ac.id/upz-api/public/unzip.php?token=${{ env.DEPLOY_TOKEN }}"
+          )
+
           SUCCESS=false
-          for i in {1..3}; do
-            echo "Attempt $i to trigger unzip..."
-            RESPONSE=$(curl -s -k $RESOLVE_ARGS -w "\nHTTP_STATUS:%{http_code}" "https://api.upz.unsil.ac.id/unzip.php?token=${{ env.DEPLOY_TOKEN }}" 2>&1 || true)
+          for URL in "${ENDPOINTS[@]}"; do
+            echo "Trying trigger URL: $URL"
+            RESPONSE=$(curl -s -k $RESOLVE_ARGS -w "\nHTTP_STATUS:%{http_code}" "$URL" 2>&1 || true)
             HTTP_STATUS=$(echo "$RESPONSE" | grep "HTTP_STATUS" | cut -d':' -f2 | tr -d ' \r\n')
             BODY=$(echo "$RESPONSE" | grep -v "HTTP_STATUS")
 
@@ -145,14 +154,13 @@ jobs:
               echo "Server Response: $BODY"
               SUCCESS=true
               break
+            else
+              echo "Status $HTTP_STATUS: $BODY"
             fi
-
-            echo "Attempt $i failed (Status: $HTTP_STATUS, Output: $BODY). Retrying in 3s..."
-            sleep 3
           done
 
           if [ "$SUCCESS" != "true" ]; then
-            echo "❌ Extraction failed! Could not reach https://api.upz.unsil.ac.id/unzip.php"
+            echo "❌ Extraction failed! Could not trigger unzip.php on any endpoint."
             exit 1
           fi
           echo "✅ Backend successfully deployed and extracted in seconds!"
