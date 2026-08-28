@@ -37,8 +37,10 @@ class AuthController extends Controller
         return response()->json([
             'token' => $token,
             'user'  => [
-                'name' => $user->name,
-                'role' => $user->role ?? 'administrator',
+                'id'    => $user->id,
+                'name'  => $user->name,
+                'email' => $user->email,
+                'role'  => $user->role ?? 'administrator',
             ],
         ]);
     }
@@ -108,8 +110,9 @@ class AuthController extends Controller
         $user = $request->user();
 
         $request->validate([
-            'current_password' => 'required|string',
-            'new_password'     => 'required|string|min:6|confirmed',
+            'current_password'      => 'required|string',
+            'new_password'          => 'required|string|min:8|confirmed',
+            'new_password_confirmation' => 'required|string',
         ]);
 
         if (! Hash::check($request->current_password, $user->password)) {
