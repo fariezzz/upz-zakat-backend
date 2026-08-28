@@ -1,4 +1,11 @@
 <IfModule mod_rewrite.c>
     RewriteEngine On
+
+    # Jangan rewrite jika file atau folder fisik benar-benar ada (misal unzip.php / release.zip)
+    RewriteCond %{REQUEST_FILENAME} -f [OR]
+    RewriteCond %{REQUEST_FILENAME} -d
+    RewriteRule ^ - [L]
+
+    # Teruskan request route lainnya ke folder public/
     RewriteRule ^(.*)$ public/$1 [L]
 </IfModule>

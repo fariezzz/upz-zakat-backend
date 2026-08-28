@@ -62,6 +62,9 @@ jobs:
 
           cat << 'EOF' > deploy-pkg/unzip.php
           <?php
+          @ini_set('display_errors', '1');
+          @error_reporting(E_ALL);
+
           $token = $_GET['token'] ?? '';
           $expectedToken = '__TOKEN_PLACEHOLDER__';
 
@@ -83,12 +86,22 @@ jobs:
           if (!file_exists($zipFile)) {
               http_response_code(404);
               header('Content-Type: application/json');
-              echo json_encode(['status' => 'error', 'message' => 'release.zip not found']);
+              echo json_encode(['status' => 'error', 'message' => 'release.zip not found in ' . $extractPath]);
+              exit;
+          }
+
+          if (!class_exists('ZipArchive')) {
+              http_response_code(500);
+              header('Content-Type: application/json');
+              echo json_encode(['status' => 'error', 'message' => 'PHP ZipArchive extension is not enabled in cPanel']);
               exit;
           }
 
           $zip = new ZipArchive();
-          if ($zip->open($zipFile) === TRUE) {
+          $res = $zip->open($zipFile);
+          if ($res === TRUE) {
+              @set_time_limit(300);
+              @ini_set('memory_limit', '512M');
               $zip->extractTo($extractPath);
               $zip->close();
 
@@ -102,13 +115,17 @@ jobs:
           } else {
               http_response_code(500);
               header('Content-Type: application/json');
-              echo json_encode(['status' => 'error', 'message' => 'Failed to extract release.zip']);
+              echo json_encode(['status' => 'error', 'message' => 'Failed to extract release.zip, error code: ' . $res]);
           }
           EOF
 
           sed -i 's/^[ \t]*//' deploy-pkg/unzip.php
           sed -i "s/__TOKEN_PLACEHOLDER__/${TOKEN}/g" deploy-pkg/unzip.php
           cp deploy-pkg/unzip.php deploy-pkg/public/unzip.php
+
+          # Set strict cPanel permissions (755 for directories, 644 for files)
+          chmod 755 deploy-pkg deploy-pkg/public
+          chmod 644 deploy-pkg/release.zip deploy-pkg/unzip.php deploy-pkg/public/unzip.php
 
           echo "📦 Package size: $(du -sh deploy-pkg/release.zip | cut -f1)"
 
