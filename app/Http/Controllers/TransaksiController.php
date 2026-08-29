@@ -23,7 +23,8 @@ class TransaksiController extends Controller
                 });
             })
             ->when($request->kategori, fn($q) => $q->where('kategori', $request->kategori))
-            ->when($request->bulan && $request->bulan !== '0', fn($q) => $q->where('bulan', (int) $request->bulan))
+            ->when($request->bulan && (int)$request->bulan !== 0, fn($q) => $q->where('bulan', (int) $request->bulan))
+            ->when($request->tahun && (int)$request->tahun !== 0, fn($q) => $q->where('tahun', (int) $request->tahun))
             ->orderByDesc('created_at');
 
         $totalNominal = (clone $query)->sum('nominal');
@@ -65,6 +66,8 @@ class TransaksiController extends Controller
                           ->orWhereHas('mustahik', fn($m) => $m->where('nama', 'ilike', "%{$request->search}%"));
                 });
             })
+            ->when($request->bulan && (int)$request->bulan !== 0, fn($q) => $q->where('bulan', (int) $request->bulan))
+            ->when($request->tahun && (int)$request->tahun !== 0, fn($q) => $q->where('tahun', (int) $request->tahun))
             ->orderByDesc('created_at');
 
         $totalNominal = (clone $query)->sum('nominal');

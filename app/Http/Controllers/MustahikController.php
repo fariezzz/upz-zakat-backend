@@ -18,6 +18,7 @@ class MustahikController extends Controller
         if ($search = $request->query('search')) {
             $query->where(function ($q) use ($search) {
                 $q->where('nama', 'ilike', "%{$search}%")
+                  ->orWhere('nik', 'ilike', "%{$search}%")
                   ->orWhere('email', 'ilike', "%{$search}%")
                   ->orWhere('alamat', 'ilike', "%{$search}%")
                   ->orWhere('kategori', 'ilike', "%{$search}%");
@@ -35,15 +36,16 @@ class MustahikController extends Controller
         $perPage = min((int) $request->query('per_page', 10), 100);
         $data    = $query->orderByDesc('created_at')->paginate($perPage);
 
+        $totalKontak = Mustahik::whereNotNull('no_hp')->where('no_hp', '!=', '')->count();
+
         return response()->json([
             'data' => $data->items(),
             'meta' => [
-                'current_page'      => $data->currentPage(),
-                'last_page'         => $data->lastPage(),
-                'per_page'          => $data->perPage(),
-                'total'             => $data->total(),
-                'total_aktif'       => Mustahik::where('status', 'aktif')->count(),
-                'total_tidak_aktif' => Mustahik::where('status', '!=', 'aktif')->count(),
+                'current_page' => $data->currentPage(),
+                'last_page'    => $data->lastPage(),
+                'per_page'     => $data->perPage(),
+                'total'        => $data->total(),
+                'total_kontak' => $totalKontak,
             ],
         ]);
     }
@@ -55,12 +57,14 @@ class MustahikController extends Controller
     {
         $validated = $request->validate([
             'nama'     => 'required|string|max:100',
+            'nik'      => 'nullable|string|max:30',
             'email'    => 'nullable|email|max:100',
             'no_hp'    => 'nullable|string|max:20',
             'alamat'   => 'nullable|string|max:255',
             'kategori' => 'nullable|string|max:100',
-            'status'   => 'in:aktif,tidak_aktif',
         ]);
+
+        $validated['status'] = 'aktif';
 
         $mustahik = Mustahik::create($validated);
         return response()->json($mustahik, 201);
@@ -73,6 +77,7 @@ class MustahikController extends Controller
     {
         $validated = $request->validate([
             'nama'     => 'sometimes|required|string|max:100',
+            'nik'      => 'nullable|string|max:30',
             'email'    => 'nullable|email|max:100',
             'no_hp'    => 'nullable|string|max:20',
             'alamat'   => 'nullable|string|max:255',

@@ -9,7 +9,7 @@ class MuzakkiController extends Controller
 {
     /**
      * GET /api/muzakki
-     * Query params: search, status, per_page, page
+     * Query params: search, kategori, per_page, page
      */
     public function index(Request $request)
     {
@@ -18,17 +18,44 @@ class MuzakkiController extends Controller
         if ($search = $request->query('search')) {
             $query->where(function ($q) use ($search) {
                 $q->where('nama', 'ilike', "%{$search}%")
+                  ->orWhere('nik', 'ilike', "%{$search}%")
+                  ->orWhere('nip', 'ilike', "%{$search}%")
                   ->orWhere('email', 'ilike', "%{$search}%")
                   ->orWhere('unit_kerja', 'ilike', "%{$search}%");
             });
         }
 
-        if ($status = $request->query('status')) {
-            $query->where('status', $status);
+        if ($kategori = $request->query('kategori')) {
+            if ($kategori === 'dosen_staf' || $kategori === 'dosen/staf') {
+                $query->whereNotNull('unit_kerja')
+                      ->where('unit_kerja', '!=', '')
+                      ->where('unit_kerja', '!=', 'Masyarakat Umum')
+                      ->where('unit_kerja', '!=', 'Umum');
+            } elseif ($kategori === 'umum') {
+                $query->where(function ($q) {
+                    $q->whereNull('unit_kerja')
+                      ->orWhere('unit_kerja', '')
+                      ->orWhere('unit_kerja', 'Masyarakat Umum')
+                      ->orWhere('unit_kerja', 'Umum');
+                });
+            }
         }
 
         $perPage = min((int) $request->query('per_page', 10), 100);
         $data = $query->withCount('transaksi')->orderByDesc('created_at')->paginate($perPage);
+
+        $totalDosenStaf = Muzakki::whereNotNull('unit_kerja')
+            ->where('unit_kerja', '!=', '')
+            ->where('unit_kerja', '!=', 'Masyarakat Umum')
+            ->where('unit_kerja', '!=', 'Umum')
+            ->count();
+
+        $totalUmum = Muzakki::where(function ($q) {
+            $q->whereNull('unit_kerja')
+              ->orWhere('unit_kerja', '')
+              ->orWhere('unit_kerja', 'Masyarakat Umum')
+              ->orWhere('unit_kerja', 'Umum');
+        })->count();
 
         return response()->json([
             'data'  => $data->items(),
@@ -37,8 +64,8 @@ class MuzakkiController extends Controller
                 'last_page'         => $data->lastPage(),
                 'per_page'          => $data->perPage(),
                 'total'             => $data->total(),
-                'total_aktif'       => Muzakki::where('status', 'aktif')->count(),
-                'total_tidak_aktif' => Muzakki::where('status', '!=', 'aktif')->count(),
+                'total_dosen_staf'  => $totalDosenStaf,
+                'total_umum'        => $totalUmum,
             ],
         ]);
     }
@@ -51,7 +78,7 @@ class MuzakkiController extends Controller
     {
         $search = $request->query('search', '');
 
-        $data = Muzakki::where('status', 'aktif')
+        $data = Muzakki::query()
             ->when($search, fn($q) => $q->where('nama', 'ilike', "%{$search}%"))
             ->orderBy('nama')
             ->limit(30)
@@ -67,11 +94,14 @@ class MuzakkiController extends Controller
     {
         $validated = $request->validate([
             'nama'       => 'required|string|max:100',
+            'nik'        => 'nullable|string|max:30',
+            'nip'        => 'nullable|string|max:30',
             'email'      => 'nullable|email|max:100',
             'no_hp'      => 'nullable|string|max:20',
             'unit_kerja' => 'nullable|string|max:100',
-            'status'     => 'in:aktif,tidak_aktif',
         ]);
+
+        $validated['status'] = 'aktif';
 
         $muzakki = Muzakki::create($validated);
 
@@ -85,10 +115,11 @@ class MuzakkiController extends Controller
     {
         $validated = $request->validate([
             'nama'       => 'sometimes|required|string|max:100',
+            'nik'        => 'nullable|string|max:30',
+            'nip'        => 'nullable|string|max:30',
             'email'      => 'nullable|email|max:100',
             'no_hp'      => 'nullable|string|max:20',
             'unit_kerja' => 'nullable|string|max:100',
-            'status'     => 'in:aktif,tidak_aktif',
         ]);
 
         $muzakki->update($validated);

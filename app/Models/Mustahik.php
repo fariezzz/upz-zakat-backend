@@ -10,6 +10,7 @@ class Mustahik extends Model
 
     protected $fillable = [
         'nama',
+        'nik',
         'email',
         'no_hp',
         'alamat',

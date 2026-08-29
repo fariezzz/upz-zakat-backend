@@ -13,6 +13,8 @@ class Muzakki extends Model
 
     protected $fillable = [
         'nama',
+        'nik',
+        'nip',
         'email',
         'no_hp',
         'unit_kerja',
