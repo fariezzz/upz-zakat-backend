@@ -86,6 +86,7 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::post('/transaksi/pengumpulan', [TransaksiController::class, 'storePengumpulan']);
     Route::get('/transaksi/penyaluran',   [TransaksiController::class, 'indexPenyaluran']);
     Route::post('/transaksi/penyaluran',  [TransaksiController::class, 'storePenyaluran']);
+    Route::delete('/transaksi/{id}',      [TransaksiController::class, 'destroy']);
 
     // ——————————————————————————
     // Donasi Online (admin view)

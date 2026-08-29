@@ -168,4 +168,20 @@ class TransaksiController extends Controller
 
         return response()->json($transaksi->load(['mustahik', 'program']), 201);
     }
+
+    /**
+     * DELETE /api/transaksi/{id}
+     * Hapus transaksi berdasarkan ID. Hanya Administrator yang diizinkan.
+     */
+    public function destroy(Request $request, $id)
+    {
+        if ($request->user()->role !== 'administrator') {
+            return response()->json(['message' => 'Hanya Administrator yang dapat menghapus transaksi.'], 403);
+        }
+
+        $transaksi = Transaksi::findOrFail($id);
+        $transaksi->delete();
+
+        return response()->json(['message' => 'Transaksi berhasil dihapus.']);
+    }
 }
