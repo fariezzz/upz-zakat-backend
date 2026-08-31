@@ -177,11 +177,16 @@ class BeritaController extends Controller
         // Jika Cloudinary terkonfigurasi, simpan langsung ke CDN Cloudinary
         if (env('CLOUDINARY_CLOUD_NAME') && env('CLOUDINARY_API_KEY') && env('CLOUDINARY_API_SECRET')) {
             try {
-                $uploadedFile = $file->storeOnCloudinary('berita');
+                // Upload ke Cloudinary menggunakan disk
+                $path = $file->store('berita', 'cloudinary');
+                
+                // Dapatkan URL dari Cloudinary
+                $url = \Illuminate\Support\Facades\Storage::disk('cloudinary')->url($path);
+                
                 return response()->json([
                     'message' => 'Gambar berhasil diunggah ke cloud.',
-                    'url'     => $uploadedFile->getSecurePath(),
-                    'path'    => $uploadedFile->getPublicId(),
+                    'url'     => $url,
+                    'path'    => $path,
                 ]);
             } catch (\Throwable $e) {
                 \Illuminate\Support\Facades\Log::warning('Cloudinary upload error: ' . $e->getMessage());
