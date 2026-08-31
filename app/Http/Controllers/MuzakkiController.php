@@ -24,6 +24,10 @@ class MuzakkiController extends Controller
         if ($search) {
             $query->where(function ($q) use ($search) {
                 $q->where('nama', 'ilike', "%{$search}%")
+                  ->orWhere('nik', 'ilike', "%{$search}%")
+                  ->orWhere('nip', 'ilike', "%{$search}%")
+                  ->orWhere('no_hp', 'ilike', "%{$search}%")
+                  ->orWhere('email', 'ilike', "%{$search}%")
                   ->orWhere('unit_kerja', 'ilike', "%{$search}%")
                   ->orWhere('pekerjaan', 'ilike', "%{$search}%")
                   ->orWhere('alamat_lengkap', 'ilike', "%{$search}%")
@@ -85,26 +89,29 @@ class MuzakkiController extends Controller
             
             $kategoriLabel = $m->kategori ?: ($isUnsil ? 'Dosen & Staf UNSIL' : 'Muzakki Umum');
 
-            // Ambil jenis zakat dari transaksi terakhir jika ada, atau default sesuai profil
-            $lastTrx = $m->transaksi->first();
-            $jenisZakat = $lastTrx ? $lastTrx->kategori : ($isUnsil ? 'Zakat Penghasilan' : 'Zakat Maal');
-
             return [
-                'id'             => $m->id,
-                'nama'           => $m->nama,
-                'nik'            => $m->nik,
-                'nip'            => $m->nip,
-                'jenis_kelamin'  => $m->jenis_kelamin,
-                'tempat_lahir'   => $m->tempat_lahir,
-                'tanggal_lahir'  => $m->tanggal_lahir,
-                'pekerjaan'      => $m->pekerjaan,
-                'alamat_lengkap' => $m->alamat_lengkap,
-                'email'          => $m->email,
-                'no_hp'          => $m->no_hp,
-                'unit_kerja'     => $m->unit_kerja,
-                'kategori'       => $kategoriLabel,
-                'created_at'     => $m->created_at ? $m->created_at->toISOString() : null,
-                'tanggal_daftar' => $m->created_at ? $m->created_at->translatedFormat('d M Y') : '-',
+                'id'                => $m->id,
+                'nama'              => $m->nama,
+                'nik'               => $m->nik,
+                'nip'               => $m->nip,
+                'jenis_kelamin'     => $m->jenis_kelamin,
+                'tempat_lahir'      => $m->tempat_lahir,
+                'tanggal_lahir'     => $m->tanggal_lahir,
+                'pekerjaan'         => $m->pekerjaan,
+                'alamat_lengkap'    => $m->alamat_lengkap,
+                'email'             => $m->email,
+                'no_hp'             => $m->no_hp,
+                'unit_kerja'        => $m->unit_kerja,
+                'kategori'          => $kategoriLabel,
+                'jenis_zakat'       => $m->jenis_zakat,
+                'frekuensi'         => $m->frekuensi,
+                'nominal'           => $m->nominal,
+                'kesepakatan_zakat' => $m->kesepakatan_zakat,
+                'metode_pembayaran' => $m->metode_pembayaran,
+                'pilihan_bank'      => $m->pilihan_bank,
+                'pilihan_ewallet'   => $m->pilihan_ewallet,
+                'created_at'        => $m->created_at ? $m->created_at->toISOString() : null,
+                'tanggal_daftar'    => $m->created_at ? $m->created_at->translatedFormat('d M Y') : '-',
             ];
         });
 
@@ -125,38 +132,81 @@ class MuzakkiController extends Controller
     public function publicRegister(Request $request)
     {
         $validated = $request->validate([
-            'nama'           => 'required|string|max:150',
-            'nik'            => 'nullable|string|max:30',
-            'nip'            => 'nullable|string|max:30',
-            'jenis_kelamin'  => 'nullable|string|max:20',
-            'tempat_lahir'   => 'nullable|string|max:100',
-            'tanggal_lahir'  => 'nullable|string|max:50',
-            'pekerjaan'      => 'nullable|string|max:100',
-            'alamat_lengkap' => 'nullable|string',
-            'email'          => 'nullable|string|max:100',
-            'no_hp'          => 'nullable|string|max:25',
-            'kategori'       => 'nullable|string|max:50',
-            'unit_kerja'     => 'nullable|string|max:200',
+            'nama'              => 'required|string|max:150',
+            'nik'               => 'nullable|string|max:30',
+            'nip'               => 'nullable|string|max:30',
+            'jenis_kelamin'     => 'nullable|string|max:20',
+            'tempat_lahir'      => 'nullable|string|max:100',
+            'tanggal_lahir'     => 'nullable|string|max:50',
+            'pekerjaan'         => 'nullable|string|max:100',
+            'alamat_lengkap'    => 'nullable|string',
+            'email'             => 'nullable|string|max:100',
+            'no_hp'             => 'nullable|string|max:25',
+            'kategori'          => 'nullable|string|max:50',
+            'unit_kerja'        => 'nullable|string|max:200',
+            'jenis_zakat'       => 'nullable|string|max:200',
+            'frekuensi'         => 'nullable|string|max:100',
+            'nominal'           => 'nullable|numeric|min:0',
+            'metode_pembayaran' => 'nullable|string|max:100',
+            'pilihan_bank'      => 'nullable|string|max:100',
+            'pilihan_ewallet'   => 'nullable|string|max:100',
+            'kesepakatan_zakat' => 'nullable',
         ]);
 
         $kategoriDefault = !empty($validated['kategori'])
             ? $validated['kategori']
             : (!empty($validated['nip']) ? 'Dosen & Staf UNSIL' : 'Muzakki Umum');
 
+        $kesepakatan = $validated['kesepakatan_zakat'] ?? null;
+        if (is_string($kesepakatan)) {
+            $decoded = json_decode($kesepakatan, true);
+            if (json_last_error() === JSON_ERROR_NONE) {
+                $kesepakatan = $decoded;
+            }
+        }
+
+        // Hitung total nominal & join jenis zakat jika kesepakatan berbentuk array
+        $nominalTotal = isset($validated['nominal']) ? (float) $validated['nominal'] : null;
+        $jenisZakatSummary = $validated['jenis_zakat'] ?? null;
+
+        if (is_array($kesepakatan) && count($kesepakatan) > 0) {
+            $sum = 0;
+            $labels = [];
+            foreach ($kesepakatan as $item) {
+                $sum += (float) ($item['nominal'] ?? 0);
+                if (!empty($item['jenis'])) {
+                    $labels[] = $item['jenis'];
+                }
+            }
+            if ($nominalTotal === null || $nominalTotal <= 0) {
+                $nominalTotal = $sum;
+            }
+            if (empty($jenisZakatSummary) && count($labels) > 0) {
+                $jenisZakatSummary = implode(', ', array_unique($labels));
+            }
+        }
+
         $muzakki = Muzakki::updateOrCreate(
             ['nama' => $validated['nama']],
             [
-                'nik'            => $validated['nik'] ?? null,
-                'nip'            => $validated['nip'] ?? null,
-                'jenis_kelamin'  => $validated['jenis_kelamin'] ?? null,
-                'tempat_lahir'   => $validated['tempat_lahir'] ?? null,
-                'tanggal_lahir'  => $validated['tanggal_lahir'] ?? null,
-                'pekerjaan'      => $validated['pekerjaan'] ?? null,
-                'alamat_lengkap' => $validated['alamat_lengkap'] ?? null,
-                'email'          => $validated['email'] ?? null,
-                'no_hp'          => $validated['no_hp'] ?? null,
-                'kategori'       => $kategoriDefault,
-                'unit_kerja'     => $validated['unit_kerja'] ?? ($kategoriDefault === 'Muzakki Umum' ? 'Masyarakat Umum' : null),
+                'nik'               => $validated['nik'] ?? null,
+                'nip'               => $validated['nip'] ?? null,
+                'jenis_kelamin'     => $validated['jenis_kelamin'] ?? null,
+                'tempat_lahir'      => $validated['tempat_lahir'] ?? null,
+                'tanggal_lahir'     => $validated['tanggal_lahir'] ?? null,
+                'pekerjaan'         => $validated['pekerjaan'] ?? null,
+                'alamat_lengkap'    => $validated['alamat_lengkap'] ?? null,
+                'email'             => $validated['email'] ?? null,
+                'no_hp'             => $validated['no_hp'] ?? null,
+                'kategori'          => $kategoriDefault,
+                'unit_kerja'        => $validated['unit_kerja'] ?? ($kategoriDefault === 'Muzakki Umum' ? 'Masyarakat Umum' : null),
+                'jenis_zakat'       => $jenisZakatSummary,
+                'frekuensi'         => $validated['frekuensi'] ?? null,
+                'nominal'           => $nominalTotal,
+                'metode_pembayaran' => $validated['metode_pembayaran'] ?? null,
+                'pilihan_bank'      => $validated['pilihan_bank'] ?? null,
+                'pilihan_ewallet'   => $validated['pilihan_ewallet'] ?? null,
+                'kesepakatan_zakat' => $kesepakatan,
             ]
         );
 
@@ -278,18 +328,22 @@ class MuzakkiController extends Controller
     public function store(Request $request)
     {
         $validated = $request->validate([
-            'nama'           => 'required|string|max:150',
-            'nik'            => 'nullable|string|max:30',
-            'nip'            => 'nullable|string|max:30',
-            'jenis_kelamin'  => 'nullable|string|max:20',
-            'tempat_lahir'   => 'nullable|string|max:100',
-            'tanggal_lahir'  => 'nullable|string|max:50',
-            'pekerjaan'      => 'nullable|string|max:100',
-            'alamat_lengkap' => 'nullable|string',
-            'email'          => 'nullable|email|max:100',
-            'no_hp'          => 'nullable|string|max:25',
-            'kategori'       => 'nullable|string|max:50',
-            'unit_kerja'     => 'nullable|string|max:200',
+            'nama'              => 'required|string|max:150',
+            'nik'               => 'nullable|string|max:30',
+            'nip'               => 'nullable|string|max:30',
+            'jenis_kelamin'     => 'nullable|string|max:20',
+            'tempat_lahir'      => 'nullable|string|max:100',
+            'tanggal_lahir'     => 'nullable|string|max:50',
+            'pekerjaan'         => 'nullable|string|max:100',
+            'alamat_lengkap'    => 'nullable|string',
+            'email'             => 'nullable|email|max:100',
+            'no_hp'             => 'nullable|string|max:25',
+            'kategori'          => 'nullable|string|max:50',
+            'unit_kerja'        => 'nullable|string|max:200',
+            'jenis_zakat'       => 'nullable|string|max:100',
+            'frekuensi'         => 'nullable|string|max:50',
+            'nominal'           => 'nullable|numeric|min:0',
+            'metode_pembayaran' => 'nullable|string|max:100',
         ]);
 
         $muzakki = Muzakki::create($validated);
@@ -303,18 +357,22 @@ class MuzakkiController extends Controller
     public function update(Request $request, Muzakki $muzakki)
     {
         $validated = $request->validate([
-            'nama'           => 'sometimes|required|string|max:150',
-            'nik'            => 'nullable|string|max:30',
-            'nip'            => 'nullable|string|max:30',
-            'jenis_kelamin'  => 'nullable|string|max:20',
-            'tempat_lahir'   => 'nullable|string|max:100',
-            'tanggal_lahir'  => 'nullable|string|max:50',
-            'pekerjaan'      => 'nullable|string|max:100',
-            'alamat_lengkap' => 'nullable|string',
-            'email'          => 'nullable|email|max:100',
-            'no_hp'          => 'nullable|string|max:25',
-            'kategori'       => 'nullable|string|max:50',
-            'unit_kerja'     => 'nullable|string|max:200',
+            'nama'              => 'sometimes|required|string|max:150',
+            'nik'               => 'nullable|string|max:30',
+            'nip'               => 'nullable|string|max:30',
+            'jenis_kelamin'     => 'nullable|string|max:20',
+            'tempat_lahir'      => 'nullable|string|max:100',
+            'tanggal_lahir'     => 'nullable|string|max:50',
+            'pekerjaan'         => 'nullable|string|max:100',
+            'alamat_lengkap'    => 'nullable|string',
+            'email'             => 'nullable|email|max:100',
+            'no_hp'             => 'nullable|string|max:25',
+            'kategori'          => 'nullable|string|max:50',
+            'unit_kerja'        => 'nullable|string|max:200',
+            'jenis_zakat'       => 'nullable|string|max:100',
+            'frekuensi'         => 'nullable|string|max:50',
+            'nominal'           => 'nullable|numeric|min:0',
+            'metode_pembayaran' => 'nullable|string|max:100',
         ]);
 
         $muzakki->update($validated);

@@ -11,6 +11,8 @@ use App\Http\Controllers\MustahikController;
 use App\Http\Controllers\ProgramController;
 use App\Http\Controllers\TransaksiController;
 use App\Http\Controllers\UserController;
+use App\Http\Controllers\ZakatAgreementController;
+use App\Http\Controllers\TagihanController;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Route;
 
@@ -24,6 +26,7 @@ Route::get('/public/berita', [BeritaController::class, 'publicList']);
 Route::get('/public/berita/{idOrSlug}', [BeritaController::class, 'publicDetail']);
 Route::get('/public/muzakki', [MuzakkiController::class, 'publicList']);
 Route::post('/public/muzakki/register', [MuzakkiController::class, 'publicRegister']);
+Route::post('/public/zakat-request', [ZakatAgreementController::class, 'publicStore']);
 
 
 
@@ -129,4 +132,18 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::post('/users',            [UserController::class, 'store']);
     Route::put('/users/{user}',      [UserController::class, 'update']);
     Route::delete('/users/{user}',   [UserController::class, 'destroy']);
+
+    // ——————————————————————————
+    // Manajemen Permintaan Perubahan Kesepakatan Zakat
+    // ——————————————————————————
+    Route::get('/zakat-requests',                         [ZakatAgreementController::class, 'index']);
+    Route::get('/zakat-requests/pending-count',           [ZakatAgreementController::class, 'pendingCount']);
+    Route::patch('/zakat-requests/{id}/approve',          [ZakatAgreementController::class, 'approve']);
+    Route::patch('/zakat-requests/{id}/reject',           [ZakatAgreementController::class, 'reject']);
+
+    // ——————————————————————————
+    // Manajemen Tagihan & Kepatuhan Zakat
+    // ——————————————————————————
+    Route::get('/tagihan',                                [TagihanController::class, 'index']);
+    Route::post('/tagihan/catat-bayar',                   [TagihanController::class, 'catatBayar']);
 });

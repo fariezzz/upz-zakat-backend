@@ -16,7 +16,7 @@ class DonasiController extends Controller
     public function store(Request $request)
     {
         $validated = $request->validate([
-            'kategori'     => 'required|string|max:50',
+            'kategori'     => 'required|string|max:100',
             'nominal'      => 'required|integer|min:10000',
             'metode'       => 'required|in:transfer-bank,qris,e-wallet',
             'anonim'       => 'boolean',
@@ -25,11 +25,19 @@ class DonasiController extends Controller
             'telepon'      => 'nullable|string|max:20',
             'keterangan'   => 'nullable|string|max:255',
             'program_id'   => 'nullable|integer|exists:program_penyaluran,id',
+            'muzakki_id'   => 'nullable|integer|exists:muzakki,id',
         ]);
 
         $now     = now();
         $kode    = 'DON-' . strtoupper(Str::random(6));
         $program = null;
+        $muzakki = null;
+
+        if (!empty($validated['muzakki_id'])) {
+            $muzakki = \App\Models\Muzakki::find($validated['muzakki_id']);
+        } elseif (!empty($validated['nama_donatur']) && !($validated['anonim'] ?? false)) {
+            $muzakki = \App\Models\Muzakki::where('nama', $validated['nama_donatur'])->first();
+        }
 
         if (!empty($validated['program_id'])) {
             $program = ProgramPenyaluran::find($validated['program_id']);
@@ -41,11 +49,12 @@ class DonasiController extends Controller
             if ($program) {
                 $deskripsi = 'Donasi Online – ' . $validated['kategori'] . ' untuk Program ' . $program->nama;
             } else {
-                $deskripsi = 'Donasi Online – ' . $validated['kategori'];
+                $deskripsi = 'Penunaian ' . $validated['kategori'];
             }
 
-            if (!empty($validated['nama_donatur']) && !($validated['anonim'] ?? false)) {
-                $deskripsi .= ' oleh ' . $validated['nama_donatur'];
+            $namaTampil = $muzakki?->nama ?: ($validated['nama_donatur'] ?? null);
+            if (!empty($namaTampil) && !($validated['anonim'] ?? false)) {
+                $deskripsi .= ' oleh ' . $namaTampil;
             }
         }
 
@@ -59,6 +68,7 @@ class DonasiController extends Controller
             'tahun'      => $now->year,
             'bulan'      => $now->month,
             'program_id' => $validated['program_id'] ?? null,
+            'muzakki_id' => $muzakki?->id ?? null,
         ]);
 
         return response()->json([

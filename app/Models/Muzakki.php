@@ -24,8 +24,19 @@ class Muzakki extends Model
         'no_hp',
         'kategori',
         'unit_kerja',
+        'jenis_zakat',
+        'frekuensi',
+        'nominal',
+        'metode_pembayaran',
+        'kesepakatan_zakat',
+        'pilihan_bank',
+        'pilihan_ewallet',
     ];
 
+    protected $casts = [
+        'kesepakatan_zakat' => 'array',
+        'nominal'           => 'float',
+    ];
 
     public function transaksi()
     {
