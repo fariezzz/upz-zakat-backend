@@ -5,6 +5,7 @@ namespace App\Http\Controllers;
 use App\Models\Muzakki;
 use App\Models\Mustahik;
 use App\Models\Transaksi;
+use App\Models\ProgramPenyaluran;
 use Illuminate\Http\Request;
 
 class LaporanController extends Controller
@@ -110,6 +111,7 @@ class LaporanController extends Controller
 
         $totalMuzakki  = Muzakki::where('status', 'aktif')->count();
         $totalMustahik = Mustahik::where('status', 'aktif')->count();
+        $totalProgram  = ProgramPenyaluran::count();
 
         $penerimaan = Transaksi::where('jenis', 'masuk')
             ->where('tahun', $tahun)
@@ -133,6 +135,7 @@ class LaporanController extends Controller
             'total_keluar'   => (int) $totalKeluar,
             'total_muzakki'  => $totalMuzakki,
             'total_mustahik' => $totalMustahik,
+            'total_program'  => $totalProgram,
             'penerimaan'     => $penerimaan,
             'penyaluran'     => $penyaluran,
         ]);

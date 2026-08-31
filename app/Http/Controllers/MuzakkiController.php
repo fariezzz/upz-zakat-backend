@@ -8,6 +8,144 @@ use Illuminate\Http\Request;
 class MuzakkiController extends Controller
 {
     /**
+     * GET /api/public/muzakki
+     * Public transparency list (nama, kategori, jenis_zakat, status, count stats)
+     */
+    public function publicList(Request $request)
+    {
+        $search = $request->query('search');
+        $kategori = $request->query('kategori');
+
+        $query = Muzakki::where('status', 'aktif')
+            ->with(['transaksi' => function ($q) {
+                $q->where('jenis', 'masuk')->latest();
+            }]);
+
+        if ($search) {
+            $query->where(function ($q) use ($search) {
+                $q->where('nama', 'ilike', "%{$search}%")
+                  ->orWhere('unit_kerja', 'ilike', "%{$search}%");
+            });
+        }
+
+        if ($kategori === 'unsil' || $kategori === 'dosen_staf') {
+            $query->whereNotNull('unit_kerja')
+                  ->where('unit_kerja', '!=', '')
+                  ->where('unit_kerja', '!=', 'Masyarakat Umum')
+                  ->where('unit_kerja', '!=', 'Umum');
+        } elseif ($kategori === 'umum') {
+            $query->where(function ($q) {
+                $q->whereNull('unit_kerja')
+                  ->orWhere('unit_kerja', '')
+                  ->orWhere('unit_kerja', 'Masyarakat Umum')
+                  ->orWhere('unit_kerja', 'Umum');
+            });
+        }
+
+        $allMuzakki = $query->orderBy('nama')->get();
+
+        $totalDosenStaf = Muzakki::where('status', 'aktif')
+            ->whereNotNull('unit_kerja')
+            ->where('unit_kerja', '!=', '')
+            ->where('unit_kerja', '!=', 'Masyarakat Umum')
+            ->where('unit_kerja', '!=', 'Umum')
+            ->count();
+
+        $totalUmum = Muzakki::where('status', 'aktif')
+            ->where(function ($q) {
+                $q->whereNull('unit_kerja')
+                  ->orWhere('unit_kerja', '')
+                  ->orWhere('unit_kerja', 'Masyarakat Umum')
+                  ->orWhere('unit_kerja', 'Umum');
+            })->count();
+
+        $list = $allMuzakki->map(function ($m) {
+            $isUnsil = !empty($m->unit_kerja) && !in_array($m->unit_kerja, ['Masyarakat Umum', 'Umum']);
+            $kategoriLabel = $isUnsil ? 'Dosen & Staf UNSIL' : 'Muzakki Umum';
+
+            // Ambil jenis zakat dari transaksi terakhir jika ada, atau default sesuai profil
+            $lastTrx = $m->transaksi->first();
+            $jenisZakat = $lastTrx ? $lastTrx->kategori : ($isUnsil ? 'Zakat Penghasilan' : 'Zakat Maal');
+
+            return [
+                'id'         => $m->id,
+                'nama'       => $m->nama,
+                'unit_kerja' => $m->unit_kerja,
+                'kategori'   => $kategoriLabel,
+                'jenisZakat' => $jenisZakat,
+                'status'     => ucfirst($m->status ?? 'Aktif'),
+            ];
+        });
+
+        return response()->json([
+            'data'  => $list,
+            'stats' => [
+                'total'      => $totalDosenStaf + $totalUmum,
+                'dosen_staf' => $totalDosenStaf,
+                'umum'       => $totalUmum,
+            ],
+        ]);
+    }
+
+    /**
+     * POST /api/public/muzakki/register
+     * Pendaftaran muzakki baru dari halaman publik
+     */
+    public function publicRegister(Request $request)
+    {
+        $validated = $request->validate([
+            'nama'              => 'required|string|max:150',
+            'nik'               => 'nullable|string|max:30',
+            'nip'               => 'nullable|string|max:30',
+            'email'             => 'nullable|string|max:100',
+            'no_hp'             => 'nullable|string|max:25',
+            'unit_kerja'        => 'nullable|string|max:200',
+            'jenis_zakat'       => 'nullable|string|max:100',
+            'frekuensi'         => 'nullable|string|max:50',
+            'nominal'           => 'nullable|numeric|min:0',
+            'metode_pembayaran' => 'nullable|string|max:100',
+        ]);
+
+        $muzakki = Muzakki::updateOrCreate(
+            ['nama' => $validated['nama']],
+            [
+                'nik'        => $validated['nik'] ?? null,
+                'nip'        => $validated['nip'] ?? null,
+                'email'      => $validated['email'] ?? null,
+                'no_hp'      => $validated['no_hp'] ?? null,
+                'unit_kerja' => $validated['unit_kerja'] ?? 'Masyarakat Umum',
+                'status'     => 'aktif',
+            ]
+        );
+
+        // Jika ada nominal dan pembayaran, simpan transaksi
+        if (!empty($validated['nominal']) && $validated['nominal'] >= 10000) {
+            $kategori = !empty($validated['jenis_zakat']) ? ucfirst($validated['jenis_zakat']) : 'Zakat Penghasilan';
+            if ($kategori === 'Penghasilan') $kategori = 'Zakat Profesi';
+            if ($kategori === 'Maal') $kategori = 'Zakat Maal';
+            if ($kategori === 'Fitrah') $kategori = 'Zakat Fitrah';
+
+            \App\Models\Transaksi::create([
+                'kode'        => 'TRX-MASUK-' . strtoupper(\Illuminate\Support\Str::random(6)),
+                'jenis'       => 'masuk',
+                'kategori'    => $kategori,
+                'deskripsi'   => 'Penerimaan ' . $kategori . ' dari ' . $muzakki->nama . ' (Pendaftaran Muzakki Online)',
+                'nominal'     => $validated['nominal'],
+                'metode'      => !empty($validated['metode_pembayaran']) ? ucfirst($validated['metode_pembayaran']) : 'Transfer Bank',
+                'tahun'       => (int) now()->year,
+                'bulan'       => (int) now()->month,
+                'muzakki_id'  => $muzakki->id,
+            ]);
+        }
+
+        return response()->json([
+            'success' => true,
+            'message' => 'Pendaftaran Muzakki berhasil!',
+            'data'    => $muzakki,
+        ], 201);
+    }
+
+    /**
      * GET /api/muzakki
      * Query params: search, kategori, per_page, page
      */
@@ -69,6 +207,7 @@ class MuzakkiController extends Controller
             ],
         ]);
     }
+
 
     /**
      * GET /api/muzakki/options

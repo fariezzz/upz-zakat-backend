@@ -115,11 +115,25 @@ class ProgramController extends Controller
      */
     public function publicList(Request $request)
     {
+        $tahun = $request->query('tahun', now()->year);
+
         $programs = ProgramPenyaluran::with('transaksi')
             ->where('status', 'aktif')
-            ->orderByDesc('tahun')
-            ->orderBy('kode')
+            ->when($tahun, fn($q) => $q->where('tahun', (int) $tahun))
+            ->orderBy('id')
             ->get();
+
+        // Jika tahun berjalan belum ada data, ambil dari tahun terbaru yang memiliki program aktif
+        if ($programs->isEmpty()) {
+            $latestYear = ProgramPenyaluran::where('status', 'aktif')->max('tahun');
+            if ($latestYear) {
+                $programs = ProgramPenyaluran::with('transaksi')
+                    ->where('status', 'aktif')
+                    ->where('tahun', $latestYear)
+                    ->orderBy('id')
+                    ->get();
+            }
+        }
 
         return response()->json([
             'data' => $programs->map(fn($p) => $this->fmt($p)),
@@ -136,10 +150,13 @@ class ProgramController extends Controller
             'deskripsi'          => $p->deskripsi,
             'jumlah_penerima'    => $p->jumlah_penerima,     // computed
             'target_nominal'     => (int) $p->target_nominal,
-            'nominal_disalurkan' => $p->nominal_disalurkan,  // computed
+            'nominal_terkumpul'  => $p->nominal_terkumpul,   // computed dari transaksi masuk
+            'nominal_disalurkan' => $p->nominal_disalurkan,  // computed dari transaksi keluar
             'progress'           => $p->progress,             // computed
             'status'             => $p->status,
             'tahun'              => (int) $p->tahun,
         ];
     }
 }
+
+

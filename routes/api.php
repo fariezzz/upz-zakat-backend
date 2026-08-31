@@ -1,6 +1,7 @@
 <?php
 
 use App\Http\Controllers\AuthController;
+use App\Http\Controllers\BeritaController;
 use App\Http\Controllers\DashboardController;
 use App\Http\Controllers\DonasiController;
 use App\Http\Controllers\JurnalController;
@@ -19,6 +20,11 @@ use Illuminate\Support\Facades\Route;
 Route::post('/donasi', [DonasiController::class, 'store']);
 Route::get('/public/program', [ProgramController::class, 'publicList']);
 Route::get('/public/laporan', [LaporanController::class, 'publicReport']);
+Route::get('/public/berita', [BeritaController::class, 'publicList']);
+Route::get('/public/berita/{idOrSlug}', [BeritaController::class, 'publicDetail']);
+Route::get('/public/muzakki', [MuzakkiController::class, 'publicList']);
+Route::post('/public/muzakki/register', [MuzakkiController::class, 'publicRegister']);
+
 
 
 // ——————————————————————————————————
@@ -105,6 +111,16 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::post('/jurnal',           [JurnalController::class, 'store']);
     Route::put('/jurnal/{jurnal}',   [JurnalController::class, 'update']);
     Route::delete('/jurnal/{jurnal}',[JurnalController::class, 'destroy']);
+
+    // ——————————————————————————
+    // Berita Routes (Admin)
+    // ——————————————————————————
+    Route::post('/berita/upload-image', [BeritaController::class, 'uploadImage']);
+    Route::get('/berita',               [BeritaController::class, 'index']);
+    Route::post('/berita',              [BeritaController::class, 'store']);
+    Route::get('/berita/{berita}',      [BeritaController::class, 'show']);
+    Route::put('/berita/{berita}',      [BeritaController::class, 'update']);
+    Route::delete('/berita/{berita}',   [BeritaController::class, 'destroy']);
 
     // ——————————————————————————
     // Manajemen Pengguna (Admin only)

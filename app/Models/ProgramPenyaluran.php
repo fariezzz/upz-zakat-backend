@@ -36,44 +36,55 @@ class ProgramPenyaluran extends Model
     }
 
     /**
-     * Hitung jumlah penerima unik (distinct mustahik_id) dari transaksi.
-     * Dengan withCount('transaksi') atau loadCount, atau lewat accessor ini.
+     * Hitung jumlah penerima unik (distinct mustahik_id) dari transaksi keluar.
      */
     public function getJumlahPenerimaAttribute(): int
     {
         if ($this->relationLoaded('transaksi')) {
             return $this->transaksi
+                ->where('jenis', 'keluar')
                 ->whereNotNull('mustahik_id')
                 ->pluck('mustahik_id')
                 ->unique()
                 ->count();
         }
         return $this->transaksi()
+            ->where('jenis', 'keluar')
             ->whereNotNull('mustahik_id')
             ->distinct('mustahik_id')
             ->count('mustahik_id');
     }
 
     /**
-     * Hitung persentase progres penyaluran (0-100)
+     * Hitung persentase progres donasi terkumpul (0-100)
      */
     public function getProgressAttribute(): int
     {
         if ($this->target_nominal <= 0) return 0;
-        $disalurkan = $this->relationLoaded('transaksi')
-            ? $this->transaksi->sum('nominal')
-            : $this->transaksi()->sum('nominal');
-        return (int) min(100, round(($disalurkan / $this->target_nominal) * 100));
+        $terkumpul = $this->nominal_terkumpul;
+        return (int) min(100, round(($terkumpul / $this->target_nominal) * 100));
     }
 
     /**
-     * Total nominal yang sudah disalurkan (computed dari transaksi).
+     * Total donasi yang terkumpul untuk program ini (transaksi masuk).
+     */
+    public function getNominalTerkumpulAttribute(): int
+    {
+        if ($this->relationLoaded('transaksi')) {
+            return (int) $this->transaksi->where('jenis', 'masuk')->sum('nominal');
+        }
+        return (int) $this->transaksi()->where('jenis', 'masuk')->sum('nominal');
+    }
+
+    /**
+     * Total nominal yang sudah disalurkan ke mustahik (transaksi keluar).
      */
     public function getNominalDisalurkanAttribute(): int
     {
         if ($this->relationLoaded('transaksi')) {
-            return (int) $this->transaksi->sum('nominal');
+            return (int) $this->transaksi->where('jenis', 'keluar')->sum('nominal');
         }
-        return (int) $this->transaksi()->sum('nominal');
+        return (int) $this->transaksi()->where('jenis', 'keluar')->sum('nominal');
     }
 }
+
