@@ -16,6 +16,7 @@ return Application::configure(basePath: dirname(__DIR__))
     ->withMiddleware(function (Middleware $middleware): void {
         // HandleCors sudah otomatis diload oleh Laravel
         // Kita pakai Bearer token (Sanctum), bukan cookie/session
+        $middleware->trustProxies(at: '*');
     })
     ->withExceptions(function (Exceptions $exceptions): void {
         // Kalau unauthenticated (token tidak valid/tidak ada),

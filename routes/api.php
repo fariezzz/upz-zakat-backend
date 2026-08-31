@@ -147,3 +147,12 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::get('/tagihan',                                [TagihanController::class, 'index']);
     Route::post('/tagihan/catat-bayar',                   [TagihanController::class, 'catatBayar']);
 });
+
+// Route publik untuk serve file storage via /api/storage/
+Route::get('/storage/{folder}/{file}', function ($folder, $file) {
+    $path = storage_path('app/public/' . $folder . '/' . $file);
+    if (!file_exists($path)) {
+        abort(404);
+    }
+    return response()->file($path);
+})->where('file', '.*');

@@ -42,3 +42,15 @@ Route::get('/init-migrate-seed', function () {
         ], 500);
     }
 });
+
+/*
+ * Route untuk melayani file storage secara langsung
+ * (berguna di platform seperti Render/cPanel tanpa symbolic link publik)
+ */
+Route::get('/storage/{folder}/{file}', function ($folder, $file) {
+    $path = storage_path('app/public/' . $folder . '/' . $file);
+    if (!file_exists($path)) {
+        abort(404);
+    }
+    return response()->file($path);
+})->where('file', '.*');

@@ -172,12 +172,29 @@ class BeritaController extends Controller
             'image' => 'required|image|mimes:jpeg,png,jpg,webp,gif|max:5120', // maks 5MB
         ]);
 
-        $path = $request->file('image')->store('berita', 'public');
-        $url = asset('storage/' . $path);
+        $file = $request->file('image');
+
+        // Jika Cloudinary terkonfigurasi, simpan langsung ke CDN Cloudinary
+        if (env('CLOUDINARY_CLOUD_NAME') && env('CLOUDINARY_API_KEY') && env('CLOUDINARY_API_SECRET')) {
+            try {
+                $uploadedFile = $file->storeOnCloudinary('berita');
+                return response()->json([
+                    'message' => 'Gambar berhasil diunggah ke cloud.',
+                    'url'     => $uploadedFile->getSecurePath(),
+                    'path'    => $uploadedFile->getPublicId(),
+                ]);
+            } catch (\Throwable $e) {
+                \Illuminate\Support\Facades\Log::warning('Cloudinary upload error: ' . $e->getMessage());
+            }
+        }
+
+        // Simpan ke disk public dan kembalikan relative path agar portabel di semua environment
+        $path = $file->store('berita', 'public');
+        $relativeUrl = '/storage/' . $path;
 
         return response()->json([
             'message' => 'Gambar berhasil diunggah.',
-            'url'     => $url,
+            'url'     => $relativeUrl,
             'path'    => $path,
         ]);
     }
