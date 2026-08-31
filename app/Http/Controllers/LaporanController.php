@@ -24,7 +24,7 @@ class LaporanController extends Controller
         $saldoBersih = $totalMasuk - $totalKeluar;
 
         /* ── Jumlah SDM ─────────────────────────────────── */
-        $totalMuzakki  = Muzakki::where('status', 'aktif')->count();
+        $totalMuzakki  = Muzakki::count();
         $totalMustahik = Mustahik::where('status', 'aktif')->count();
 
         /* ── Total Donasi Online ────────────────────────── */
@@ -109,7 +109,7 @@ class LaporanController extends Controller
         $totalMasuk  = Transaksi::where('jenis', 'masuk')->where('tahun', $tahun)->sum('nominal');
         $totalKeluar = Transaksi::where('jenis', 'keluar')->where('tahun', $tahun)->sum('nominal');
 
-        $totalMuzakki  = Muzakki::where('status', 'aktif')->count();
+        $totalMuzakki  = Muzakki::count();
         $totalMustahik = Mustahik::where('status', 'aktif')->count();
         $totalProgram  = ProgramPenyaluran::count();
 

@@ -9,14 +9,14 @@ class MuzakkiController extends Controller
 {
     /**
      * GET /api/public/muzakki
-     * Public transparency list (nama, kategori, jenis_zakat, status, count stats)
+     * Public transparency list (nama, kategori, jenis_zakat, count stats)
      */
     public function publicList(Request $request)
     {
         $search = $request->query('search');
         $kategori = $request->query('kategori');
 
-        $query = Muzakki::where('status', 'aktif')
+        $query = Muzakki::query()
             ->with(['transaksi' => function ($q) {
                 $q->where('jenis', 'masuk')->latest();
             }]);
@@ -24,56 +24,87 @@ class MuzakkiController extends Controller
         if ($search) {
             $query->where(function ($q) use ($search) {
                 $q->where('nama', 'ilike', "%{$search}%")
-                  ->orWhere('unit_kerja', 'ilike', "%{$search}%");
+                  ->orWhere('unit_kerja', 'ilike', "%{$search}%")
+                  ->orWhere('pekerjaan', 'ilike', "%{$search}%")
+                  ->orWhere('alamat_lengkap', 'ilike', "%{$search}%")
+                  ->orWhere('kategori', 'ilike', "%{$search}%");
             });
         }
 
         if ($kategori === 'unsil' || $kategori === 'dosen_staf') {
-            $query->whereNotNull('unit_kerja')
-                  ->where('unit_kerja', '!=', '')
-                  ->where('unit_kerja', '!=', 'Masyarakat Umum')
-                  ->where('unit_kerja', '!=', 'Umum');
+            $query->where(function ($q) {
+                $q->where('kategori', 'ilike', '%Dosen%')
+                  ->orWhere('kategori', 'ilike', '%Staf%')
+                  ->orWhere('kategori', 'ilike', '%Civitas%')
+                  ->orWhere(function ($q2) {
+                      $q2->whereNotNull('unit_kerja')
+                         ->where('unit_kerja', '!=', '')
+                         ->where('unit_kerja', '!=', 'Masyarakat Umum')
+                         ->where('unit_kerja', '!=', 'Umum');
+                  });
+            });
         } elseif ($kategori === 'umum') {
             $query->where(function ($q) {
-                $q->whereNull('unit_kerja')
-                  ->orWhere('unit_kerja', '')
-                  ->orWhere('unit_kerja', 'Masyarakat Umum')
-                  ->orWhere('unit_kerja', 'Umum');
+                $q->where('kategori', 'ilike', '%Umum%')
+                  ->orWhere(function ($q2) {
+                      $q2->whereNull('unit_kerja')
+                         ->orWhere('unit_kerja', '')
+                         ->orWhere('unit_kerja', 'Masyarakat Umum')
+                         ->orWhere('unit_kerja', 'Umum');
+                  });
             });
         }
 
         $allMuzakki = $query->orderBy('nama')->get();
 
-        $totalDosenStaf = Muzakki::where('status', 'aktif')
-            ->whereNotNull('unit_kerja')
-            ->where('unit_kerja', '!=', '')
-            ->where('unit_kerja', '!=', 'Masyarakat Umum')
-            ->where('unit_kerja', '!=', 'Umum')
-            ->count();
+        $totalDosenStaf = Muzakki::where(function ($q) {
+            $q->where('kategori', 'ilike', '%Dosen%')
+              ->orWhere('kategori', 'ilike', '%Staf%')
+              ->orWhere('kategori', 'ilike', '%Civitas%')
+              ->orWhere(function ($q2) {
+                  $q2->whereNotNull('unit_kerja')
+                     ->where('unit_kerja', '!=', '')
+                     ->where('unit_kerja', '!=', 'Masyarakat Umum')
+                     ->where('unit_kerja', '!=', 'Umum');
+              });
+        })->count();
 
-        $totalUmum = Muzakki::where('status', 'aktif')
-            ->where(function ($q) {
-                $q->whereNull('unit_kerja')
-                  ->orWhere('unit_kerja', '')
-                  ->orWhere('unit_kerja', 'Masyarakat Umum')
-                  ->orWhere('unit_kerja', 'Umum');
-            })->count();
+        $totalUmum = Muzakki::where(function ($q) {
+            $q->where('kategori', 'ilike', '%Umum%')
+              ->orWhere(function ($q2) {
+                  $q2->whereNull('unit_kerja')
+                     ->orWhere('unit_kerja', '')
+                     ->orWhere('unit_kerja', 'Masyarakat Umum')
+                     ->orWhere('unit_kerja', 'Umum');
+              });
+        })->count();
 
         $list = $allMuzakki->map(function ($m) {
-            $isUnsil = !empty($m->unit_kerja) && !in_array($m->unit_kerja, ['Masyarakat Umum', 'Umum']);
-            $kategoriLabel = $isUnsil ? 'Dosen & Staf UNSIL' : 'Muzakki Umum';
+            $isUnsil = (!empty($m->kategori) && (stripos($m->kategori, 'Dosen') !== false || stripos($m->kategori, 'Staf') !== false || stripos($m->kategori, 'UNSIL') !== false))
+                || (!empty($m->unit_kerja) && !in_array($m->unit_kerja, ['Masyarakat Umum', 'Umum']));
+            
+            $kategoriLabel = $m->kategori ?: ($isUnsil ? 'Dosen & Staf UNSIL' : 'Muzakki Umum');
 
             // Ambil jenis zakat dari transaksi terakhir jika ada, atau default sesuai profil
             $lastTrx = $m->transaksi->first();
             $jenisZakat = $lastTrx ? $lastTrx->kategori : ($isUnsil ? 'Zakat Penghasilan' : 'Zakat Maal');
 
             return [
-                'id'         => $m->id,
-                'nama'       => $m->nama,
-                'unit_kerja' => $m->unit_kerja,
-                'kategori'   => $kategoriLabel,
-                'jenisZakat' => $jenisZakat,
-                'status'     => ucfirst($m->status ?? 'Aktif'),
+                'id'             => $m->id,
+                'nama'           => $m->nama,
+                'nik'            => $m->nik,
+                'nip'            => $m->nip,
+                'jenis_kelamin'  => $m->jenis_kelamin,
+                'tempat_lahir'   => $m->tempat_lahir,
+                'tanggal_lahir'  => $m->tanggal_lahir,
+                'pekerjaan'      => $m->pekerjaan,
+                'alamat_lengkap' => $m->alamat_lengkap,
+                'email'          => $m->email,
+                'no_hp'          => $m->no_hp,
+                'unit_kerja'     => $m->unit_kerja,
+                'kategori'       => $kategoriLabel,
+                'created_at'     => $m->created_at ? $m->created_at->toISOString() : null,
+                'tanggal_daftar' => $m->created_at ? $m->created_at->translatedFormat('d M Y') : '-',
             ];
         });
 
@@ -94,53 +125,44 @@ class MuzakkiController extends Controller
     public function publicRegister(Request $request)
     {
         $validated = $request->validate([
-            'nama'              => 'required|string|max:150',
-            'nik'               => 'nullable|string|max:30',
-            'nip'               => 'nullable|string|max:30',
-            'email'             => 'nullable|string|max:100',
-            'no_hp'             => 'nullable|string|max:25',
-            'unit_kerja'        => 'nullable|string|max:200',
-            'jenis_zakat'       => 'nullable|string|max:100',
-            'frekuensi'         => 'nullable|string|max:50',
-            'nominal'           => 'nullable|numeric|min:0',
-            'metode_pembayaran' => 'nullable|string|max:100',
+            'nama'           => 'required|string|max:150',
+            'nik'            => 'nullable|string|max:30',
+            'nip'            => 'nullable|string|max:30',
+            'jenis_kelamin'  => 'nullable|string|max:20',
+            'tempat_lahir'   => 'nullable|string|max:100',
+            'tanggal_lahir'  => 'nullable|string|max:50',
+            'pekerjaan'      => 'nullable|string|max:100',
+            'alamat_lengkap' => 'nullable|string',
+            'email'          => 'nullable|string|max:100',
+            'no_hp'          => 'nullable|string|max:25',
+            'kategori'       => 'nullable|string|max:50',
+            'unit_kerja'     => 'nullable|string|max:200',
         ]);
+
+        $kategoriDefault = !empty($validated['kategori'])
+            ? $validated['kategori']
+            : (!empty($validated['nip']) ? 'Dosen & Staf UNSIL' : 'Muzakki Umum');
 
         $muzakki = Muzakki::updateOrCreate(
             ['nama' => $validated['nama']],
             [
-                'nik'        => $validated['nik'] ?? null,
-                'nip'        => $validated['nip'] ?? null,
-                'email'      => $validated['email'] ?? null,
-                'no_hp'      => $validated['no_hp'] ?? null,
-                'unit_kerja' => $validated['unit_kerja'] ?? 'Masyarakat Umum',
-                'status'     => 'aktif',
+                'nik'            => $validated['nik'] ?? null,
+                'nip'            => $validated['nip'] ?? null,
+                'jenis_kelamin'  => $validated['jenis_kelamin'] ?? null,
+                'tempat_lahir'   => $validated['tempat_lahir'] ?? null,
+                'tanggal_lahir'  => $validated['tanggal_lahir'] ?? null,
+                'pekerjaan'      => $validated['pekerjaan'] ?? null,
+                'alamat_lengkap' => $validated['alamat_lengkap'] ?? null,
+                'email'          => $validated['email'] ?? null,
+                'no_hp'          => $validated['no_hp'] ?? null,
+                'kategori'       => $kategoriDefault,
+                'unit_kerja'     => $validated['unit_kerja'] ?? ($kategoriDefault === 'Muzakki Umum' ? 'Masyarakat Umum' : null),
             ]
         );
 
-        // Jika ada nominal dan pembayaran, simpan transaksi
-        if (!empty($validated['nominal']) && $validated['nominal'] >= 10000) {
-            $kategori = !empty($validated['jenis_zakat']) ? ucfirst($validated['jenis_zakat']) : 'Zakat Penghasilan';
-            if ($kategori === 'Penghasilan') $kategori = 'Zakat Profesi';
-            if ($kategori === 'Maal') $kategori = 'Zakat Maal';
-            if ($kategori === 'Fitrah') $kategori = 'Zakat Fitrah';
-
-            \App\Models\Transaksi::create([
-                'kode'        => 'TRX-MASUK-' . strtoupper(\Illuminate\Support\Str::random(6)),
-                'jenis'       => 'masuk',
-                'kategori'    => $kategori,
-                'deskripsi'   => 'Penerimaan ' . $kategori . ' dari ' . $muzakki->nama . ' (Pendaftaran Muzakki Online)',
-                'nominal'     => $validated['nominal'],
-                'metode'      => !empty($validated['metode_pembayaran']) ? ucfirst($validated['metode_pembayaran']) : 'Transfer Bank',
-                'tahun'       => (int) now()->year,
-                'bulan'       => (int) now()->month,
-                'muzakki_id'  => $muzakki->id,
-            ]);
-        }
-
         return response()->json([
             'success' => true,
-            'message' => 'Pendaftaran Muzakki berhasil!',
+            'message' => 'Pendaftaran Muzakki berhasil! Anda kini terdaftar sebagai Muzakki UPZ Zakat UNSIL.',
             'data'    => $muzakki,
         ], 201);
     }
@@ -159,22 +181,37 @@ class MuzakkiController extends Controller
                   ->orWhere('nik', 'ilike', "%{$search}%")
                   ->orWhere('nip', 'ilike', "%{$search}%")
                   ->orWhere('email', 'ilike', "%{$search}%")
-                  ->orWhere('unit_kerja', 'ilike', "%{$search}%");
+                  ->orWhere('no_hp', 'ilike', "%{$search}%")
+                  ->orWhere('unit_kerja', 'ilike', "%{$search}%")
+                  ->orWhere('pekerjaan', 'ilike', "%{$search}%")
+                  ->orWhere('alamat_lengkap', 'ilike', "%{$search}%")
+                  ->orWhere('tempat_lahir', 'ilike', "%{$search}%")
+                  ->orWhere('kategori', 'ilike', "%{$search}%");
             });
         }
 
         if ($kategori = $request->query('kategori')) {
             if ($kategori === 'dosen_staf' || $kategori === 'dosen/staf') {
-                $query->whereNotNull('unit_kerja')
-                      ->where('unit_kerja', '!=', '')
-                      ->where('unit_kerja', '!=', 'Masyarakat Umum')
-                      ->where('unit_kerja', '!=', 'Umum');
+                $query->where(function ($q) {
+                    $q->where('kategori', 'ilike', '%Dosen%')
+                      ->orWhere('kategori', 'ilike', '%Staf%')
+                      ->orWhere('kategori', 'ilike', '%Civitas%')
+                      ->orWhere(function ($q2) {
+                          $q2->whereNotNull('unit_kerja')
+                             ->where('unit_kerja', '!=', '')
+                             ->where('unit_kerja', '!=', 'Masyarakat Umum')
+                             ->where('unit_kerja', '!=', 'Umum');
+                      });
+                });
             } elseif ($kategori === 'umum') {
                 $query->where(function ($q) {
-                    $q->whereNull('unit_kerja')
-                      ->orWhere('unit_kerja', '')
-                      ->orWhere('unit_kerja', 'Masyarakat Umum')
-                      ->orWhere('unit_kerja', 'Umum');
+                    $q->where('kategori', 'ilike', '%Umum%')
+                      ->orWhere(function ($q2) {
+                          $q2->whereNull('unit_kerja')
+                             ->orWhere('unit_kerja', '')
+                             ->orWhere('unit_kerja', 'Masyarakat Umum')
+                             ->orWhere('unit_kerja', 'Umum');
+                      });
                 });
             }
         }
@@ -182,17 +219,26 @@ class MuzakkiController extends Controller
         $perPage = min((int) $request->query('per_page', 10), 100);
         $data = $query->withCount('transaksi')->orderByDesc('created_at')->paginate($perPage);
 
-        $totalDosenStaf = Muzakki::whereNotNull('unit_kerja')
-            ->where('unit_kerja', '!=', '')
-            ->where('unit_kerja', '!=', 'Masyarakat Umum')
-            ->where('unit_kerja', '!=', 'Umum')
-            ->count();
+        $totalDosenStaf = Muzakki::where(function ($q) {
+            $q->where('kategori', 'ilike', '%Dosen%')
+              ->orWhere('kategori', 'ilike', '%Staf%')
+              ->orWhere('kategori', 'ilike', '%Civitas%')
+              ->orWhere(function ($q2) {
+                  $q2->whereNotNull('unit_kerja')
+                     ->where('unit_kerja', '!=', '')
+                     ->where('unit_kerja', '!=', 'Masyarakat Umum')
+                     ->where('unit_kerja', '!=', 'Umum');
+              });
+        })->count();
 
         $totalUmum = Muzakki::where(function ($q) {
-            $q->whereNull('unit_kerja')
-              ->orWhere('unit_kerja', '')
-              ->orWhere('unit_kerja', 'Masyarakat Umum')
-              ->orWhere('unit_kerja', 'Umum');
+            $q->where('kategori', 'ilike', '%Umum%')
+              ->orWhere(function ($q2) {
+                  $q2->whereNull('unit_kerja')
+                     ->orWhere('unit_kerja', '')
+                     ->orWhere('unit_kerja', 'Masyarakat Umum')
+                     ->orWhere('unit_kerja', 'Umum');
+              });
         })->count();
 
         return response()->json([
@@ -221,7 +267,7 @@ class MuzakkiController extends Controller
             ->when($search, fn($q) => $q->where('nama', 'ilike', "%{$search}%"))
             ->orderBy('nama')
             ->limit(30)
-            ->get(['id', 'nama', 'unit_kerja']);
+            ->get(['id', 'nama', 'unit_kerja', 'kategori']);
 
         return response()->json($data);
     }
@@ -232,15 +278,19 @@ class MuzakkiController extends Controller
     public function store(Request $request)
     {
         $validated = $request->validate([
-            'nama'       => 'required|string|max:100',
-            'nik'        => 'nullable|string|max:30',
-            'nip'        => 'nullable|string|max:30',
-            'email'      => 'nullable|email|max:100',
-            'no_hp'      => 'nullable|string|max:20',
-            'unit_kerja' => 'nullable|string|max:100',
+            'nama'           => 'required|string|max:150',
+            'nik'            => 'nullable|string|max:30',
+            'nip'            => 'nullable|string|max:30',
+            'jenis_kelamin'  => 'nullable|string|max:20',
+            'tempat_lahir'   => 'nullable|string|max:100',
+            'tanggal_lahir'  => 'nullable|string|max:50',
+            'pekerjaan'      => 'nullable|string|max:100',
+            'alamat_lengkap' => 'nullable|string',
+            'email'          => 'nullable|email|max:100',
+            'no_hp'          => 'nullable|string|max:25',
+            'kategori'       => 'nullable|string|max:50',
+            'unit_kerja'     => 'nullable|string|max:200',
         ]);
-
-        $validated['status'] = 'aktif';
 
         $muzakki = Muzakki::create($validated);
 
@@ -253,12 +303,18 @@ class MuzakkiController extends Controller
     public function update(Request $request, Muzakki $muzakki)
     {
         $validated = $request->validate([
-            'nama'       => 'sometimes|required|string|max:100',
-            'nik'        => 'nullable|string|max:30',
-            'nip'        => 'nullable|string|max:30',
-            'email'      => 'nullable|email|max:100',
-            'no_hp'      => 'nullable|string|max:20',
-            'unit_kerja' => 'nullable|string|max:100',
+            'nama'           => 'sometimes|required|string|max:150',
+            'nik'            => 'nullable|string|max:30',
+            'nip'            => 'nullable|string|max:30',
+            'jenis_kelamin'  => 'nullable|string|max:20',
+            'tempat_lahir'   => 'nullable|string|max:100',
+            'tanggal_lahir'  => 'nullable|string|max:50',
+            'pekerjaan'      => 'nullable|string|max:100',
+            'alamat_lengkap' => 'nullable|string',
+            'email'          => 'nullable|email|max:100',
+            'no_hp'          => 'nullable|string|max:25',
+            'kategori'       => 'nullable|string|max:50',
+            'unit_kerja'     => 'nullable|string|max:200',
         ]);
 
         $muzakki->update($validated);
@@ -276,3 +332,4 @@ class MuzakkiController extends Controller
         return response()->json(['message' => 'Muzakki berhasil dihapus.']);
     }
 }
+

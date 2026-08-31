@@ -83,14 +83,12 @@ class DashboardController extends Controller
             $tahunLalu      = $tahun - 1;
             $terkumpulLalu  = $qMasuk()->where('tahun', $tahunLalu)->sum('nominal');
             $disalurkanLalu = $qKeluar()->where('tahun', $tahunLalu)->sum('nominal');
-            $muzakkiLalu    = Muzakki::where('status', 'aktif')
-                ->whereHas('transaksi', fn($q) => $q->where('tahun', $tahunLalu))->count();
+            $muzakkiLalu    = Muzakki::whereHas('transaksi', fn($q) => $q->where('tahun', $tahunLalu))->count();
         }
 
-        $muzakki = $isAll
-            ? Muzakki::where('status', 'aktif')->count()
-            : Muzakki::where('status', 'aktif')
-                ->whereHas('transaksi', fn($q) => $q->where('tahun', $tahun))->count();
+        $muzakkiTrx = Muzakki::whereHas('transaksi', fn($q) => $q->where('tahun', $tahun))->count();
+        $muzakki    = $isAll ? Muzakki::count() : ($muzakkiTrx > 0 ? $muzakkiTrx : Muzakki::count());
+
 
         return [
             'totalDanaTerkumpul'      => (int) $terkumpul,

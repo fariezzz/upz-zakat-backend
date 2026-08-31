@@ -15,11 +15,17 @@ class Muzakki extends Model
         'nama',
         'nik',
         'nip',
+        'jenis_kelamin',
+        'tempat_lahir',
+        'tanggal_lahir',
+        'pekerjaan',
+        'alamat_lengkap',
         'email',
         'no_hp',
+        'kategori',
         'unit_kerja',
-        'status',
     ];
+
 
     public function transaksi()
     {

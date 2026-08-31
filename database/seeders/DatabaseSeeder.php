@@ -17,7 +17,7 @@ class DatabaseSeeder extends Seeder
             MuzakkiSeeder::class,
             MustahikSeeder::class,
             ProgramSeeder::class,
-            TransaksiSeeder::class,
+            // TransaksiSeeder::class,
             BeritaSeeder::class,
         ]);
     }
