@@ -36,7 +36,31 @@ class DonasiController extends Controller
         if (!empty($validated['muzakki_id'])) {
             $muzakki = \App\Models\Muzakki::find($validated['muzakki_id']);
         } elseif (!empty($validated['nama_donatur']) && !($validated['anonim'] ?? false)) {
-            $muzakki = \App\Models\Muzakki::where('nama', $validated['nama_donatur'])->first();
+            // Cari muzakki berdasarkan nama, atau buat baru jika belum ada
+            $muzakki = \App\Models\Muzakki::firstOrCreate(
+                ['nama' => $validated['nama_donatur']],
+                [
+                    'email'          => $validated['email'] ?? null,
+                    'no_hp'          => $validated['telepon'] ?? null,
+                    'kategori'       => 'Donatur Online',
+                    'alamat_lengkap' => null,
+                ]
+            );
+        } else {
+            // Anonim atau tanpa nama: tetap buat muzakki agar terhitung di jumlah_donatur
+            // Gunakan email/telepon sebagai identifier unik jika ada, fallback ke nama generik
+            $identifier = $validated['email'] ?? $validated['telepon'] ?? null;
+            $namaGenerik = $identifier ? 'Donatur ' . substr($identifier, 0, 20) : 'Donatur Anonim';
+            
+            $muzakki = \App\Models\Muzakki::firstOrCreate(
+                ['nama' => $namaGenerik],
+                [
+                    'email'          => $validated['email'] ?? null,
+                    'no_hp'          => $validated['telepon'] ?? null,
+                    'kategori'       => 'Donatur Online',
+                    'alamat_lengkap' => null,
+                ]
+            );
         }
 
         if (!empty($validated['program_id'])) {

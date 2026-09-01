@@ -149,6 +149,7 @@ class ProgramController extends Controller
             'nama'               => $p->nama,
             'deskripsi'          => $p->deskripsi,
             'jumlah_penerima'    => $p->jumlah_penerima,     // computed
+            'jumlah_donatur'     => $p->jumlah_donatur,      // computed dari transaksi masuk
             'target_nominal'     => (int) $p->target_nominal,
             'nominal_terkumpul'  => $p->nominal_terkumpul,   // computed dari transaksi masuk
             'nominal_disalurkan' => $p->nominal_disalurkan,  // computed dari transaksi keluar

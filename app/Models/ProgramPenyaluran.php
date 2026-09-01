@@ -56,6 +56,26 @@ class ProgramPenyaluran extends Model
     }
 
     /**
+     * Hitung jumlah donatur unik (distinct muzakki_id) dari transaksi masuk.
+     */
+    public function getJumlahDonaturAttribute(): int
+    {
+        if ($this->relationLoaded('transaksi')) {
+            return $this->transaksi
+                ->where('jenis', 'masuk')
+                ->whereNotNull('muzakki_id')
+                ->pluck('muzakki_id')
+                ->unique()
+                ->count();
+        }
+        return $this->transaksi()
+            ->where('jenis', 'masuk')
+            ->whereNotNull('muzakki_id')
+            ->distinct('muzakki_id')
+            ->count('muzakki_id');
+    }
+
+    /**
      * Hitung persentase progres donasi terkumpul (0-100)
      */
     public function getProgressAttribute(): int
