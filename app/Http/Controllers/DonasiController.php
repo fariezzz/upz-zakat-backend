@@ -33,34 +33,12 @@ class DonasiController extends Controller
         $program = null;
         $muzakki = null;
 
+        // Hanya link ke muzakki jika muzakki_id diberikan (registered muzakki only)
+        // Donor (anonim atau bernama) TIDAK boleh dicatat di tabel muzakki
         if (!empty($validated['muzakki_id'])) {
-            $muzakki = \App\Models\Muzakki::find($validated['muzakki_id']);
-        } elseif (!empty($validated['nama_donatur']) && !($validated['anonim'] ?? false)) {
-            // Cari muzakki berdasarkan nama, atau buat baru jika belum ada
-            $muzakki = \App\Models\Muzakki::firstOrCreate(
-                ['nama' => $validated['nama_donatur']],
-                [
-                    'email'          => $validated['email'] ?? null,
-                    'no_hp'          => $validated['telepon'] ?? null,
-                    'kategori'       => 'Donatur Online',
-                    'alamat_lengkap' => null,
-                ]
-            );
-        } else {
-            // Anonim atau tanpa nama: tetap buat muzakki agar terhitung di jumlah_donatur
-            // Gunakan email/telepon sebagai identifier unik jika ada, fallback ke nama generik
-            $identifier = $validated['email'] ?? $validated['telepon'] ?? null;
-            $namaGenerik = $identifier ? 'Donatur ' . substr($identifier, 0, 20) : 'Donatur Anonim';
-            
-            $muzakki = \App\Models\Muzakki::firstOrCreate(
-                ['nama' => $namaGenerik],
-                [
-                    'email'          => $validated['email'] ?? null,
-                    'no_hp'          => $validated['telepon'] ?? null,
-                    'kategori'       => 'Donatur Online',
-                    'alamat_lengkap' => null,
-                ]
-            );
+            $muzakki = \App\Models\Muzakki::where('id', $validated['muzakki_id'])
+                ->where('tipe_muzakki', 'terdaftar')
+                ->first();
         }
 
         if (!empty($validated['program_id'])) {

@@ -17,6 +17,7 @@ class MuzakkiController extends Controller
         $kategori = $request->query('kategori');
 
         $query = Muzakki::query()
+            ->where('tipe_muzakki', 'terdaftar')  // Only show registered muzakki
             ->with(['transaksi' => function ($q) {
                 $q->where('jenis', 'masuk')->latest();
             }]);
@@ -61,27 +62,29 @@ class MuzakkiController extends Controller
 
         $allMuzakki = $query->orderBy('nama')->get();
 
-        $totalDosenStaf = Muzakki::where(function ($q) {
-            $q->where('kategori', 'ilike', '%Dosen%')
-              ->orWhere('kategori', 'ilike', '%Staf%')
-              ->orWhere('kategori', 'ilike', '%Civitas%')
-              ->orWhere(function ($q2) {
-                  $q2->whereNotNull('unit_kerja')
-                     ->where('unit_kerja', '!=', '')
-                     ->where('unit_kerja', '!=', 'Masyarakat Umum')
-                     ->where('unit_kerja', '!=', 'Umum');
-              });
-        })->count();
+        $totalDosenStaf = Muzakki::where('tipe_muzakki', 'terdaftar')
+            ->where(function ($q) {
+                $q->where('kategori', 'ilike', '%Dosen%')
+                  ->orWhere('kategori', 'ilike', '%Staf%')
+                  ->orWhere('kategori', 'ilike', '%Civitas%')
+                  ->orWhere(function ($q2) {
+                      $q2->whereNotNull('unit_kerja')
+                         ->where('unit_kerja', '!=', '')
+                         ->where('unit_kerja', '!=', 'Masyarakat Umum')
+                         ->where('unit_kerja', '!=', 'Umum');
+                  });
+            })->count();
 
-        $totalUmum = Muzakki::where(function ($q) {
-            $q->where('kategori', 'ilike', '%Umum%')
-              ->orWhere(function ($q2) {
-                  $q2->whereNull('unit_kerja')
-                     ->orWhere('unit_kerja', '')
-                     ->orWhere('unit_kerja', 'Masyarakat Umum')
-                     ->orWhere('unit_kerja', 'Umum');
-              });
-        })->count();
+        $totalUmum = Muzakki::where('tipe_muzakki', 'terdaftar')
+            ->where(function ($q) {
+                $q->where('kategori', 'ilike', '%Umum%')
+                  ->orWhere(function ($q2) {
+                      $q2->whereNull('unit_kerja')
+                         ->orWhere('unit_kerja', '')
+                         ->orWhere('unit_kerja', 'Masyarakat Umum')
+                         ->orWhere('unit_kerja', 'Umum');
+                  });
+            })->count();
 
         $list = $allMuzakki->map(function ($m) {
             $isUnsil = (!empty($m->kategori) && (stripos($m->kategori, 'Dosen') !== false || stripos($m->kategori, 'Staf') !== false || stripos($m->kategori, 'UNSIL') !== false))
@@ -207,6 +210,7 @@ class MuzakkiController extends Controller
                 'pilihan_bank'      => $validated['pilihan_bank'] ?? null,
                 'pilihan_ewallet'   => $validated['pilihan_ewallet'] ?? null,
                 'kesepakatan_zakat' => $kesepakatan,
+                'tipe_muzakki'      => 'terdaftar',  // Mark as registered muzakki
             ]
         );
 
@@ -223,7 +227,7 @@ class MuzakkiController extends Controller
      */
     public function index(Request $request)
     {
-        $query = Muzakki::query();
+        $query = Muzakki::where('tipe_muzakki', 'terdaftar');
 
         if ($search = $request->query('search')) {
             $query->where(function ($q) use ($search) {
@@ -269,27 +273,29 @@ class MuzakkiController extends Controller
         $perPage = min((int) $request->query('per_page', 10), 100);
         $data = $query->withCount('transaksi')->orderByDesc('created_at')->paginate($perPage);
 
-        $totalDosenStaf = Muzakki::where(function ($q) {
-            $q->where('kategori', 'ilike', '%Dosen%')
-              ->orWhere('kategori', 'ilike', '%Staf%')
-              ->orWhere('kategori', 'ilike', '%Civitas%')
-              ->orWhere(function ($q2) {
-                  $q2->whereNotNull('unit_kerja')
-                     ->where('unit_kerja', '!=', '')
-                     ->where('unit_kerja', '!=', 'Masyarakat Umum')
-                     ->where('unit_kerja', '!=', 'Umum');
-              });
-        })->count();
+        $totalDosenStaf = Muzakki::where('tipe_muzakki', 'terdaftar')
+            ->where(function ($q) {
+                $q->where('kategori', 'ilike', '%Dosen%')
+                  ->orWhere('kategori', 'ilike', '%Staf%')
+                  ->orWhere('kategori', 'ilike', '%Civitas%')
+                  ->orWhere(function ($q2) {
+                      $q2->whereNotNull('unit_kerja')
+                         ->where('unit_kerja', '!=', '')
+                         ->where('unit_kerja', '!=', 'Masyarakat Umum')
+                         ->where('unit_kerja', '!=', 'Umum');
+                  });
+            })->count();
 
-        $totalUmum = Muzakki::where(function ($q) {
-            $q->where('kategori', 'ilike', '%Umum%')
-              ->orWhere(function ($q2) {
-                  $q2->whereNull('unit_kerja')
-                     ->orWhere('unit_kerja', '')
-                     ->orWhere('unit_kerja', 'Masyarakat Umum')
-                     ->orWhere('unit_kerja', 'Umum');
-              });
-        })->count();
+        $totalUmum = Muzakki::where('tipe_muzakki', 'terdaftar')
+            ->where(function ($q) {
+                $q->where('kategori', 'ilike', '%Umum%')
+                  ->orWhere(function ($q2) {
+                      $q2->whereNull('unit_kerja')
+                         ->orWhere('unit_kerja', '')
+                         ->orWhere('unit_kerja', 'Masyarakat Umum')
+                         ->orWhere('unit_kerja', 'Umum');
+                  });
+            })->count();
 
         return response()->json([
             'data'  => $data->items(),
@@ -313,7 +319,7 @@ class MuzakkiController extends Controller
     {
         $search = $request->query('search', '');
 
-        $data = Muzakki::query()
+        $data = Muzakki::where('tipe_muzakki', 'terdaftar')
             ->when($search, fn($q) => $q->where('nama', 'ilike', "%{$search}%"))
             ->orderBy('nama')
             ->limit(30)

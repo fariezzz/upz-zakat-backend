@@ -31,6 +31,7 @@ class Muzakki extends Model
         'kesepakatan_zakat',
         'pilihan_bank',
         'pilihan_ewallet',
+        'tipe_muzakki',
     ];
 
     protected $casts = [
