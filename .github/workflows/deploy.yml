@@ -1,110 +1,139 @@
-name: Deploy Backend to cPanel
+name: Build & Deploy to VPS
 
 on:
   push:
     branches: [ main ]
   workflow_dispatch:
 
+env:
+  PHP_VERSION: "8.2"
+  STAGING_DIR: /opt/lexa/upz-backend-staging
+  RELEASES_DIR: /opt/lexa/upz-backend-releases
+  APP_LINK: /opt/lexa/apps/upz-backend
+  KEEP_RELEASES: 2
+
 jobs:
   build-and-deploy:
-    name: Build & Deploy Laravel
     runs-on: ubuntu-latest
     environment:
       name: production
+      url: ${{ vars.PRODUCTION_URL || 'https://api-upz.lexatech.my.id' }}
 
     steps:
-      - name: Checkout Code
-        uses: actions/checkout@v4
+    - name: Checkout code
+      uses: actions/checkout@v4
 
-      - name: Setup PHP
-        uses: shivammathur/setup-php@v2
-        with:
-          php-version: '8.2'
-          extensions: mbstring, xml, ctype, iconv, intl, pdo_mysql, mysqli, pdo_pgsql, pgsql, bcmath, curl, zip, tokenizer, fileinfo
-          coverage: none
-          tools: composer:v2
+    - name: Setup PHP
+      uses: shivammathur/setup-php@v2
+      with:
+        php-version: ${{ env.PHP_VERSION }}
+        extensions: pdo_mysql, pdo_pgsql, pgsql, mbstring, exif, pcntl, bcmath, gd, intl, zip
 
-      - name: Cache Composer dependencies
-        uses: actions/cache@v4
-        with:
-          path: /tmp/composer-cache
-          key: ${{ runner.os }}-composer-${{ hashFiles('**/composer.lock') }}
-          restore-keys: ${{ runner.os }}-composer-
+    - name: Install Composer dependencies
+      run: composer install --no-interaction --prefer-dist --optimize-autoloader --no-dev
 
-      - name: Install Composer Dependencies
-        run: |
-          composer install --no-dev --optimize-autoloader --prefer-dist --no-interaction --no-progress
+    - name: Assemble deployment package
+      run: |
+        mkdir -p deploy-pkg
+        
+        # Copy everything except unneeded files/folders
+        rsync -a --exclude='.git' \
+                 --exclude='.github' \
+                 --exclude='tests' \
+                 --exclude='deploy-pkg' \
+                 ./ deploy-pkg/
 
-      - name: Prepare Deploy Package
-        run: |
-          mkdir -p deploy-staging
+        echo "📦 Package size: $(du -sh deploy-pkg | cut -f1)"
+        echo "📊 Breakdown:"
+        du -sh deploy-pkg/vendor 2>/dev/null || true
+        du -sh deploy-pkg/app 2>/dev/null || true
+        du -sh deploy-pkg/public 2>/dev/null || true
 
-          # Copy everything except excluded items
-          rsync -a --exclude='.git' \
-            --exclude='.github' \
-            --exclude='.env' \
-            --exclude='.env.example' \
-            --exclude='tests' \
-            --exclude='node_modules' \
-            --exclude='.dockerignore' \
-            --exclude='Dockerfile' \
-            --exclude='docker' \
-            --exclude='render.yaml' \
-            --exclude='phpunit.xml' \
-            --exclude='README.md' \
-            --exclude='deploy-staging' \
-            --exclude='storage/logs/*.log' \
-            --exclude='storage/framework/sessions/*' \
-            --exclude='storage/framework/views/*' \
-            --exclude='storage/framework/cache/data/*' \
-            ./ deploy-staging/
+    - name: Setup SSH
+      run: |
+        mkdir -p ~/.ssh
+        echo "${{ secrets.VPS_SSH_KEY }}" > ~/.ssh/deploy_key
+        chmod 600 ~/.ssh/deploy_key
+        ssh-keyscan -H ${{ secrets.VPS_IP }} >> ~/.ssh/known_hosts 2>/dev/null
 
-          # Ensure storage directories exist with proper structure
-          mkdir -p deploy-staging/storage/logs
-          mkdir -p deploy-staging/storage/framework/sessions
-          mkdir -p deploy-staging/storage/framework/views
-          mkdir -p deploy-staging/storage/framework/cache/data
-          touch deploy-staging/storage/logs/.gitkeep
-          touch deploy-staging/storage/framework/sessions/.gitkeep
-          touch deploy-staging/storage/framework/views/.gitkeep
-          touch deploy-staging/storage/framework/cache/data/.gitkeep
+    - name: Rsync to staging
+      run: |
+        rsync -az --no-o --no-g --delete \
+          -e "ssh -i ~/.ssh/deploy_key" \
+          deploy-pkg/ \
+          ${{ secrets.VPS_USERNAME }}@${{ secrets.VPS_IP }}:${{ env.STAGING_DIR }}/
 
-          echo "📦 Deploy package ready: $(find deploy-staging -type f | wc -l) files"
+    - name: Deploy with atomic swap
+      uses: appleboy/ssh-action@v1.2.0
+      env:
+        STAGING_DIR: ${{ env.STAGING_DIR }}
+        RELEASES_DIR: ${{ env.RELEASES_DIR }}
+        APP_LINK: ${{ env.APP_LINK }}
+        KEEP_RELEASES: ${{ env.KEEP_RELEASES }}
+      with:
+        host: ${{ secrets.VPS_IP }}
+        username: ${{ secrets.VPS_USERNAME }}
+        key: ${{ secrets.VPS_SSH_KEY }}
+        envs: STAGING_DIR,RELEASES_DIR,APP_LINK,KEEP_RELEASES
+        script: |
+          set -euo pipefail
 
-      - name: Deploy Files via FTP
-        uses: SamKirkland/FTP-Deploy-Action@v4.3.5
-        with:
-          server: ${{ secrets.FTP_SERVER }}
-          username: ${{ secrets.FTP_USERNAME }}
-          password: ${{ secrets.FTP_PASSWORD }}
-          server-dir: ./
-          local-dir: ./deploy-staging/
-          dangerous-clean-slate: false
+          # 1. Release Swapping
+          RELEASE_ID=$(date +%Y%m%d_%H%M%S)
+          RELEASE_DIR="${RELEASES_DIR}/${RELEASE_ID}"
 
-      - name: Verify Deployment
-        run: |
-          echo "🔍 Verifying deployment..."
+          echo "==> Creating release ${RELEASE_ID} (hardlink copy)"
+          mkdir -p "${RELEASES_DIR}"
+          cp -al "${STAGING_DIR}" "${RELEASE_DIR}"
 
-          ENDPOINTS=(
-            "https://upz.unsil.ac.id/upz-api/public/api"
-            "https://upz.unsil.ac.id/upz-api/public/"
-            "http://upz.unsil.ac.id/upz-api/public/"
-          )
+          echo "==> Ensuring proper permissions for Laravel"
+          chmod -R a+rX "${RELEASE_DIR}"
+          chmod -R 775 "${RELEASE_DIR}/storage" "${RELEASE_DIR}/bootstrap/cache" || true
 
-          SUCCESS=false
-          for URL in "${ENDPOINTS[@]}"; do
-            echo "Checking: $URL"
-            HTTP_STATUS=$(curl -s -o /dev/null -w "%{http_code}" -k "$URL" 2>&1 || true)
-            echo "  Status: $HTTP_STATUS"
-            if [ "$HTTP_STATUS" -ge 200 ] && [ "$HTTP_STATUS" -lt 500 ]; then
-              SUCCESS=true
-              echo "  ✅ Server is responding!"
-              break
+          PREVIOUS_RELEASE=""
+          if [ -L "${APP_LINK}" ]; then
+            PREVIOUS_RELEASE=$(readlink -f "${APP_LINK}")
+            echo "    Previous: ${PREVIOUS_RELEASE}"
+          elif [ -d "${APP_LINK}" ]; then
+            echo "==> Removing existing directory ${APP_LINK} to make way for symlink"
+            rm -rf "${APP_LINK}"
+          fi
+
+          echo "==> Swapping symlink"
+          ln -sfn "${RELEASE_DIR}" "${APP_LINK}.tmp"
+          mv -Tf "${APP_LINK}.tmp" "${APP_LINK}"
+
+          # 2. Restart Container (dan build Dockerfile jika ada perubahan dependensi sistem)
+          echo "==> Recreating container"
+          cd /opt/lexa
+          docker compose up -d --build --force-recreate upz-backend
+          
+          # 3. Post-deploy Commands
+          echo "==> Ensuring Laravel storage directories exist"
+          docker compose exec -T upz-backend mkdir -p storage/framework/cache/data storage/framework/sessions storage/framework/testing storage/framework/views storage/app/public storage/logs
+          docker compose exec -T upz-backend chmod -R 777 storage bootstrap/cache
+
+          echo "==> Running Migrations & Optimization"
+          docker compose exec -T upz-backend php artisan migrate --force
+          docker compose exec -T upz-backend php artisan optimize
+
+          echo "==> Linking Storage"
+          docker compose exec -T upz-backend php artisan storage:link
+
+          # 4. Cleanup Old Releases
+          echo "==> Cleanup (keep ${KEEP_RELEASES})"
+          CURRENT=$(readlink -f "${APP_LINK}")
+          cd "${RELEASES_DIR}"
+          for dir in $(ls -1dt */ 2>/dev/null | tail -n +$((KEEP_RELEASES + 1))); do
+            FULL="${RELEASES_DIR}/${dir%/}"
+            if [ "${FULL}" != "${CURRENT}" ]; then
+              echo "    🗑️ ${dir}"
+              rm -rf "${dir}"
             fi
           done
 
-          if [ "$SUCCESS" != "true" ]; then
-            echo "⚠️ Could not verify deployment, but files were uploaded successfully."
-            echo "Please check the site manually."
-          fi
-          echo "✅ Backend deployment complete!"
+          echo "==> ✅ Deploy done! Release: ${RELEASE_ID}"
+
+    - name: Cleanup SSH key
+      if: always()
+      run: rm -f ~/.ssh/deploy_key

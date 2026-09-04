@@ -1,55 +1,27 @@
 FROM php:8.2-fpm-alpine
 
-# Install system dependencies and build packages
+COPY --from=mlocati/php-extension-installer /usr/bin/install-php-extensions /usr/local/bin/
+
 RUN apk add --no-cache \
     nginx \
     supervisor \
-    gettext \
-    git \
     curl \
-    libpng-dev \
-    libxml2-dev \
-    libzip-dev \
-    postgresql-dev \
-    oniguruma-dev \
     zip \
     unzip
 
-# Install PHP extensions required by Laravel and PostgreSQL
-RUN docker-php-ext-install \
-    pdo \
-    pdo_pgsql \
-    pdo_mysql \
-    mbstring \
-    exif \
-    pcntl \
-    bcmath \
-    gd \
-    zip \
-    opcache
+RUN install-php-extensions pdo_mysql pdo_pgsql pgsql mbstring exif pcntl bcmath gd intl zip
 
-# Install Composer
-COPY --from=composer:latest /usr/bin/composer /usr/bin/composer
+RUN echo "upload_max_filesize = 12M" > /usr/local/etc/php/conf.d/uploads.ini && \
+    echo "post_max_size = 12M" >> /usr/local/etc/php/conf.d/uploads.ini && \
+    echo "memory_limit = 256M" >> /usr/local/etc/php/conf.d/uploads.ini
 
-# Set working directory
-WORKDIR /var/www
+# Berikan hak akses kepada www-data untuk folder temporary Nginx
+RUN mkdir -p /var/lib/nginx/tmp/client_body && \
+    chown -R www-data:www-data /var/lib/nginx && \
+    chmod -R 777 /var/lib/nginx/tmp
 
-# Copy application files
-COPY . .
+WORKDIR /var/www/html
 
-# Copy Nginx template and supervisor config
-COPY docker/nginx.conf.template /etc/nginx/templates/default.conf.template
-COPY docker/supervisord.conf /etc/supervisor/conf.d/supervisord.conf
+EXPOSE 80
 
-# Install Composer dependencies (production mode)
-RUN composer install --no-dev --optimize-autoloader --no-interaction --prefer-dist
-
-# Set permissions for storage & cache, and make docker-run.sh executable
-RUN chown -R www-data:www-data /var/www \
-    && chmod -R 775 /var/www/storage /var/www/bootstrap/cache \
-    && chmod +x /var/www/docker-run.sh
-
-# Render assigns dynamic PORT env variable
-EXPOSE 8080
-
-ENTRYPOINT ["/var/www/docker-run.sh"]
+CMD ["/usr/bin/supervisord", "-c", "/etc/supervisor/conf.d/supervisord.conf"]
