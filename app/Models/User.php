@@ -24,6 +24,11 @@ class User extends Authenticatable
         'email',
         'password',
         'role',
+        'nip',
+        'no_hp',
+        'unit_kerja',
+        'is_first_login',
+        'temp_password',
     ];
 
     /**

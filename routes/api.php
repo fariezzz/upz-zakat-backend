@@ -7,6 +7,7 @@ use App\Http\Controllers\DonasiController;
 use App\Http\Controllers\JurnalController;
 use App\Http\Controllers\LaporanController;
 use App\Http\Controllers\MuzakkiController;
+use App\Http\Controllers\MuzakkiAccountController;
 use App\Http\Controllers\MustahikController;
 use App\Http\Controllers\ProgramController;
 use App\Http\Controllers\TransaksiController;
@@ -28,6 +29,10 @@ Route::get('/public/muzakki', [MuzakkiController::class, 'publicList']);
 Route::post('/public/muzakki/register', [MuzakkiController::class, 'publicRegister']);
 Route::post('/public/zakat-request', [ZakatAgreementController::class, 'publicStore']);
 
+// Muzakki Account Management (public)
+Route::post('/muzakki/create-account', [MuzakkiAccountController::class, 'createAccount']);
+Route::post('/muzakki/login', [MuzakkiAccountController::class, 'login']);
+
 
 
 // ——————————————————————————————————
@@ -47,6 +52,9 @@ Route::middleware('auth:sanctum')->group(function () {
         Route::put('/profile',          [AuthController::class, 'updateProfile']);
         Route::put('/password',         [AuthController::class, 'updatePassword']);
     });
+
+    // Muzakki Account Management (protected)
+    Route::post('/muzakki/set-password', [MuzakkiAccountController::class, 'setPassword']);
 
     // ——————————————————————————————
     // Dashboard Routes
