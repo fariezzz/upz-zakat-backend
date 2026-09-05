@@ -20,7 +20,24 @@ RUN mkdir -p /var/lib/nginx/tmp/client_body && \
     chown -R www-data:www-data /var/lib/nginx && \
     chmod -R 777 /var/lib/nginx/tmp
 
+# Create supervisor directory
+RUN mkdir -p /etc/supervisor/conf.d
+
 WORKDIR /var/www/html
+
+# Copy application files
+COPY . /var/www/html
+
+# Copy supervisor config to correct location
+COPY docker/supervisord.conf /etc/supervisor/conf.d/supervisord.conf
+
+# Copy nginx template
+COPY docker/nginx.conf.template /etc/nginx/templates/default.conf.template
+
+# Set permissions
+RUN chown -R www-data:www-data /var/www/html \
+    && chmod -R 755 /var/www/html/storage \
+    && chmod -R 755 /var/www/html/bootstrap/cache
 
 EXPOSE 80
 
