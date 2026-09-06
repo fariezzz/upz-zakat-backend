@@ -550,6 +550,9 @@ class MuzakkiController extends Controller
     private function sendEmailCredentials($email, $nama, $emailForLogin, $password)
     {
         try {
+            // Pastikan batas waktu SMTP maksimal 5 detik agar tidak menggantung response HTTP
+            config(['mail.mailers.smtp.timeout' => 5]);
+
             Mail::to($email)->send(new MuzakkiCredentialsMail(
                 $nama,
                 $emailForLogin,
@@ -558,11 +561,12 @@ class MuzakkiController extends Controller
 
             Log::info("Email credentials sent successfully to {$email}");
             return true;
-        } catch (\Exception $e) {
+        } catch (\Throwable $e) {
             Log::error("Email service error: " . $e->getMessage(), [
                 'email' => $email,
                 'exception' => get_class($e),
             ]);
+            // Return false tapi JANGAN lempar exception agar pendaftaran tetap berhasil
             return false;
         }
     }
