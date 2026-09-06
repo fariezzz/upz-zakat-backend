@@ -4,6 +4,7 @@ namespace App\Http\Controllers;
 
 use App\Models\User;
 use App\Models\Muzakki;
+use App\Models\Transaksi;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Str;
@@ -86,10 +87,9 @@ class MuzakkiAccountController extends Controller
             'password' => 'required|string',
         ]);
 
-        // Cari user berdasarkan email atau no_hp
+        // Cari user berdasarkan email atau no_hp (tanpa filter role dulu)
         $user = User::where('email', $request->email)
             ->orWhere('no_hp', $request->email)
-            ->where('role', 'muzakki')
             ->first();
 
         if (!$user || !Hash::check($request->password, $user->password)) {
@@ -97,6 +97,14 @@ class MuzakkiAccountController extends Controller
                 'success' => false,
                 'message' => 'Email/No HP atau password salah.',
             ], 401);
+        }
+
+        // Validasi role: hanya muzakki yang bisa login di halaman ini
+        if ($user->role !== 'muzakki') {
+            return response()->json([
+                'success' => false,
+                'message' => 'Akun ini tidak memiliki akses ke halaman muzakki.',
+            ], 403);
         }
 
         // Hapus token lama
@@ -213,5 +221,96 @@ class MuzakkiAccountController extends Controller
             ]);
             return false;
         }
+    }
+
+    /**
+     * GET /api/muzakki/dashboard
+     * Mengambil data dashboard muzakki yang sedang login
+     */
+    public function dashboard(Request $request)
+    {
+        $user = $request->user();
+
+        // Ambil data muzakki dari tabel muzakki
+        $muzakki = Muzakki::where('nip', $user->nip)
+            ->orWhere('email', $user->email)
+            ->orWhere('no_hp', $user->no_hp)
+            ->first();
+
+        if (!$muzakki) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Data muzakki tidak ditemukan.',
+            ], 404);
+        }
+
+        // Ambil transaksi pengumpulan (zakat yang dibayar muzakki ini)
+        $transaksi = Transaksi::where('muzakki_id', $muzakki->id)
+            ->where('jenis', 'pengumpulan')
+            ->orderBy('created_at', 'desc')
+            ->get();
+
+        // Hitung statistik tahun ini
+        $currentYear = date('Y');
+        $transaksiTahunIni = $transaksi->filter(function ($t) use ($currentYear) {
+            return $t->tahun == $currentYear || date('Y', strtotime($t->created_at)) == $currentYear;
+        });
+
+        $totalZakatTahunIni = $transaksiTahunIni->sum('nominal');
+        $jumlahPembayaran = $transaksiTahunIni->count();
+
+        // Hitung rata-rata bulanan (jika ada pembayaran)
+        $zakatBulanan = $jumlahPembayaran > 0 
+            ? round($totalZakatTahunIni / $jumlahPembayaran) 
+            : 0;
+
+        return response()->json([
+            'success' => true,
+            'data' => [
+                'user' => [
+                    'id' => $user->id,
+                    'name' => $user->name,
+                    'email' => $user->email,
+                    'nip' => $user->nip,
+                    'no_hp' => $user->no_hp,
+                    'role' => $user->role,
+                    'unit_kerja' => $user->unit_kerja,
+                ],
+                'muzakki' => [
+                    'id' => $muzakki->id,
+                    'nama' => $muzakki->nama,
+                    'nik' => $muzakki->nik,
+                    'nip' => $muzakki->nip,
+                    'jenis_kelamin' => $muzakki->jenis_kelamin,
+                    'email' => $muzakki->email,
+                    'no_hp' => $muzakki->no_hp,
+                    'kategori' => $muzakki->kategori,
+                    'unit_kerja' => $muzakki->unit_kerja,
+                    'pekerjaan' => $muzakki->pekerjaan,
+                    'alamat_lengkap' => $muzakki->alamat_lengkap,
+                ],
+                'stats' => [
+                    'total_zakat_tahun_ini' => $totalZakatTahunIni,
+                    'jumlah_pembayaran' => $jumlahPembayaran,
+                    'zakat_bulanan' => $zakatBulanan,
+                    'tahun' => $currentYear,
+                ],
+                'transaksi' => $transaksi->take(10)->map(function ($t) {
+                    return [
+                        'id' => $t->id,
+                        'kode' => $t->kode,
+                        'tanggal' => $t->created_at->format('d M Y'),
+                        'jenis_zakat' => $t->kategori ?? 'Zakat Penghasilan',
+                        'periode' => $t->bulan && $t->tahun 
+                            ? date('F Y', mktime(0, 0, 0, $t->bulan, 1, $t->tahun))
+                            : $t->created_at->format('F Y'),
+                        'nominal' => $t->nominal,
+                        'metode' => $t->metode ?? 'Transfer Bank',
+                        'status' => 'Lunas',
+                        'deskripsi' => $t->deskripsi,
+                    ];
+                }),
+            ],
+        ]);
     }
 }

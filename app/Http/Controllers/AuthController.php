@@ -29,6 +29,13 @@ class AuthController extends Controller
             ]);
         }
 
+        // Hanya administrator dan operator yang bisa login di halaman admin
+        if ($user->role !== 'administrator' && $user->role !== 'operator') {
+            throw ValidationException::withMessages([
+                'email' => ['Akun ini tidak memiliki akses ke halaman admin.'],
+            ]);
+        }
+
         // Hapus token lama (opsional, single session per device)
         $user->tokens()->delete();
 
@@ -40,7 +47,7 @@ class AuthController extends Controller
                 'id'    => $user->id,
                 'name'  => $user->name,
                 'email' => $user->email,
-                'role'  => $user->role ?? 'administrator',
+                'role'  => $user->role,
             ],
         ]);
     }

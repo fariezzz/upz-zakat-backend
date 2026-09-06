@@ -55,6 +55,7 @@ Route::middleware('auth:sanctum')->group(function () {
 
     // Muzakki Account Management (protected)
     Route::post('/muzakki/set-password', [MuzakkiAccountController::class, 'setPassword']);
+    Route::get('/muzakki/dashboard', [MuzakkiAccountController::class, 'dashboard']);
 
     // ——————————————————————————————
     // Dashboard Routes

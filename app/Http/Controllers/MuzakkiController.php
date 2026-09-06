@@ -2,12 +2,14 @@
 
 namespace App\Http\Controllers;
 
-use App\Models\Muzakki;
 use App\Models\User;
+use App\Models\Muzakki;
+use App\Mail\MuzakkiCredentialsMail;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Log;
+use Illuminate\Support\Facades\Mail;
 use Illuminate\Support\Str;
 
 class MuzakkiController extends Controller
@@ -253,16 +255,29 @@ class MuzakkiController extends Controller
                 ]);
 
                 // Kirim credentials via WhatsApp
-                $this->sendWhatsAppCredentials(
+                $whatsappSent = $this->sendWhatsAppCredentials(
                     $validated['no_hp'],
                     $validated['nama'],
                     $emailForAccount,
                     $generatedPassword
                 );
 
+                // Kirim credentials via Email (jika email valid)
+                $emailSent = false;
+                if (!empty($validated['email']) && filter_var($validated['email'], FILTER_VALIDATE_EMAIL)) {
+                    $emailSent = $this->sendEmailCredentials(
+                        $validated['email'],
+                        $validated['nama'],
+                        $validated['email'],
+                        $generatedPassword
+                    );
+                }
+
                 Log::info("User account created for muzakki: {$validated['nama']}", [
                     'user_id' => $user->id,
-                    'muzakki_id' => $muzakki->id
+                    'muzakki_id' => $muzakki->id,
+                    'whatsapp_sent' => $whatsappSent,
+                    'email_sent' => $emailSent,
                 ]);
             } else {
                 Log::info("User account already exists for: {$validated['nama']}");
@@ -446,6 +461,30 @@ class MuzakkiController extends Controller
      */
     public function destroy(Muzakki $muzakki)
     {
+        // Hapus User account terkait jika ada
+        if (!empty($muzakki->no_hp) || !empty($muzakki->email) || !empty($muzakki->nip)) {
+            $user = User::where(function ($q) use ($muzakki) {
+                if (!empty($muzakki->no_hp)) {
+                    $q->where('no_hp', $muzakki->no_hp);
+                }
+                if (!empty($muzakki->email)) {
+                    $q->orWhere('email', $muzakki->email);
+                }
+                if (!empty($muzakki->nip)) {
+                    $q->orWhere('nip', $muzakki->nip);
+                }
+            })->first();
+
+            if ($user) {
+                $user->delete();
+                Log::info("User account deleted along with muzakki", [
+                    'user_id' => $user->id,
+                    'muzakki_id' => $muzakki->id,
+                    'muzakki_name' => $muzakki->nama
+                ]);
+            }
+        }
+
         $muzakki->delete();
 
         return response()->json(['message' => 'Muzakki berhasil dihapus.']);
@@ -500,6 +539,29 @@ class MuzakkiController extends Controller
                 'phone' => $phone,
                 'exception' => get_class($e),
                 'trace' => $e->getTraceAsString()
+            ]);
+            return false;
+        }
+    }
+
+    /**
+     * Kirim credentials via Email
+     */
+    private function sendEmailCredentials($email, $nama, $emailForLogin, $password)
+    {
+        try {
+            Mail::to($email)->send(new MuzakkiCredentialsMail(
+                $nama,
+                $emailForLogin,
+                $password
+            ));
+
+            Log::info("Email credentials sent successfully to {$email}");
+            return true;
+        } catch (\Exception $e) {
+            Log::error("Email service error: " . $e->getMessage(), [
+                'email' => $email,
+                'exception' => get_class($e),
             ]);
             return false;
         }
