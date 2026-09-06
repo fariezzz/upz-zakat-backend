@@ -167,7 +167,7 @@ class MuzakkiAccountController extends Controller
     private function sendWhatsAppCredentials($phone, $nama, $email, $password)
     {
         try {
-            $whatsappServiceUrl = env('WHATSAPP_SERVICE_URL', 'http://localhost:3001');
+            $whatsappServiceUrl = rtrim(env('WHATSAPP_SERVICE_URL', 'http://localhost:3001'), '/');
 
             $message = "🔐 *Akun UPZ Zakat UNSIL Anda*\n\n"
                 . "Assalamu'alaikum *{$nama}*,\n\n"

@@ -3,7 +3,12 @@
 namespace App\Http\Controllers;
 
 use App\Models\Muzakki;
+use App\Models\User;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Hash;
+use Illuminate\Support\Facades\Http;
+use Illuminate\Support\Facades\Log;
+use Illuminate\Support\Str;
 
 class MuzakkiController extends Controller
 {
@@ -214,6 +219,56 @@ class MuzakkiController extends Controller
             ]
         );
 
+        // Buat User account jika no_hp tersedia dan belum ada account
+        if (!empty($validated['no_hp'])) {
+            $existingUser = User::where('no_hp', $validated['no_hp'])
+                ->orWhere(function ($q) use ($validated) {
+                    if (!empty($validated['email'])) {
+                        $q->where('email', $validated['email']);
+                    }
+                    if (!empty($validated['nip'])) {
+                        $q->orWhere('nip', $validated['nip']);
+                    }
+                })
+                ->first();
+
+            if (!$existingUser) {
+                // Generate password random
+                $generatedPassword = Str::random(8);
+                
+                // Email fallback jika tidak ada email
+                $emailForAccount = $validated['email'] ?? $validated['no_hp'] . '@muzakki.unsil';
+
+                // Buat user account
+                $user = User::create([
+                    'name'           => $validated['nama'],
+                    'email'          => $emailForAccount,
+                    'password'       => Hash::make($generatedPassword),
+                    'role'           => 'muzakki',
+                    'nip'            => $validated['nip'] ?? null,
+                    'no_hp'          => $validated['no_hp'],
+                    'unit_kerja'     => $validated['unit_kerja'] ?? null,
+                    'is_first_login' => true,
+                    'temp_password'  => $generatedPassword,
+                ]);
+
+                // Kirim credentials via WhatsApp
+                $this->sendWhatsAppCredentials(
+                    $validated['no_hp'],
+                    $validated['nama'],
+                    $emailForAccount,
+                    $generatedPassword
+                );
+
+                Log::info("User account created for muzakki: {$validated['nama']}", [
+                    'user_id' => $user->id,
+                    'muzakki_id' => $muzakki->id
+                ]);
+            } else {
+                Log::info("User account already exists for: {$validated['nama']}");
+            }
+        }
+
         return response()->json([
             'success' => true,
             'message' => 'Pendaftaran Muzakki berhasil! Anda kini terdaftar sebagai Muzakki UPZ Zakat UNSIL.',
@@ -394,6 +449,60 @@ class MuzakkiController extends Controller
         $muzakki->delete();
 
         return response()->json(['message' => 'Muzakki berhasil dihapus.']);
+    }
+
+    /**
+     * Kirim credentials via WhatsApp menggunakan Baileys service
+     */
+    private function sendWhatsAppCredentials($phone, $nama, $email, $password)
+    {
+        try {
+            $whatsappServiceUrl = rtrim(env('WHATSAPP_SERVICE_URL', 'http://localhost:3001'), '/');
+
+            $message = "🔐 *Akun UPZ Zakat UNSIL Anda*\n\n"
+                . "Assalamu'alaikum *{$nama}*,\n\n"
+                . "Akun muzakki Anda telah berhasil dibuat!\n\n"
+                . "📧 Email/No HP: *{$email}*\n"
+                . "🔑 Password: *{$password}*\n\n"
+                . "Silakan login di:\n"
+                . "https://upz.unsil.ac.id/masuk-muzakki\n\n"
+                . "⚠️ *Penting:* Segera ganti password Anda setelah login pertama kali untuk keamanan akun.\n\n"
+                . "_Pesan otomatis dari UPZ Zakat Universitas Siliwangi_";
+
+            Log::info("Attempting to send WhatsApp to {$phone}", [
+                'url' => $whatsappServiceUrl,
+                'phone' => $phone,
+                'nama' => $nama
+            ]);
+
+            $response = Http::timeout(10)->post("{$whatsappServiceUrl}/send", [
+                'phone'   => $phone,
+                'message' => $message,
+            ]);
+
+            Log::info("WhatsApp API Response", [
+                'status' => $response->status(),
+                'body' => $response->body()
+            ]);
+
+            if ($response->successful()) {
+                Log::info("WhatsApp credentials sent successfully to {$phone}");
+                return true;
+            } else {
+                Log::error("Failed to send WhatsApp to {$phone}", [
+                    'status' => $response->status(),
+                    'body' => $response->body()
+                ]);
+                return false;
+            }
+        } catch (\Exception $e) {
+            Log::error("WhatsApp service error: " . $e->getMessage(), [
+                'phone' => $phone,
+                'exception' => get_class($e),
+                'trace' => $e->getTraceAsString()
+            ]);
+            return false;
+        }
     }
 }
 
