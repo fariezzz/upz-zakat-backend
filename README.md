@@ -226,6 +226,14 @@ php artisan route:list --path=api
 
 ---
 
+## Layanan Notifikasi (WhatsApp & Email)
+
+Backend ini dilengkapi integrasi notifikasi otomatis saat pendaftaran akun muzakki baru:
+- **Email Service**: Menggunakan Laravel Mailer (SMTP / Log) untuk mengirimkan kredensial login akun muzakki.
+- **WhatsApp Service**: Menggunakan microservice Baileys Node.js pada folder `whatsapp-service/` (port default `3001`).
+
+---
+
 ## Tech Stack
 
 - **Laravel 12** — PHP Framework
