@@ -277,7 +277,7 @@ class MuzakkiController extends Controller
                     'user_id' => $user->id,
                     'muzakki_id' => $muzakki->id,
                     'whatsapp_sent' => $whatsappSent,
-                    'email_queued' => $emailSent,
+                    'email_sent' => $emailSent,
                 ]);
             } else {
                 Log::info("User account already exists for: {$validated['nama']}");
@@ -550,24 +550,23 @@ class MuzakkiController extends Controller
     private function sendEmailCredentials($email, $nama, $emailForLogin, $password)
     {
         try {
-            // Gunakan queue() agar tidak block request
-            // Email akan dikirim di background oleh queue worker
-            Mail::to($email)->queue(new MuzakkiCredentialsMail(
+            // Pastikan batas waktu SMTP maksimal 5 detik agar tidak menggantung response HTTP
+            config(['mail.mailers.smtp.timeout' => 5]);
+
+            Mail::to($email)->send(new MuzakkiCredentialsMail(
                 $nama,
                 $emailForLogin,
                 $password
             ));
 
-            Log::info("Email credentials queued successfully to {$email}");
+            Log::info("Email credentials sent successfully to {$email}");
             return true;
-        } catch (\Exception $e) {
-            Log::error("Email queue error: " . $e->getMessage(), [
+        } catch (\Throwable $e) {
+            Log::error("Email service error: " . $e->getMessage(), [
                 'email' => $email,
                 'exception' => get_class($e),
-                'trace' => $e->getTraceAsString()
             ]);
-            // Return false tapi JANGAN throw exception
-            // Biarkan request sukses meski email gagal
+            // Return false tapi JANGAN lempar exception agar pendaftaran tetap berhasil
             return false;
         }
     }
