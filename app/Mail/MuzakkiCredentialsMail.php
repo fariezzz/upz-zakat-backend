@@ -26,7 +26,12 @@ class MuzakkiCredentialsMail extends Mailable
         $this->nama = $nama;
         $this->email = $email;
         $this->password = $password;
-        $this->loginUrl = 'https://upz.unsil.ac.id/masuk-muzakki';
+
+        $frontendUrl = rtrim((string) (env('FRONTEND_URL') ?: env('APP_URL', 'https://upz.unsil.ac.id')), '/');
+        if (str_contains($frontendUrl, 'backend') || str_contains($frontendUrl, ':8000')) {
+            $frontendUrl = 'https://upz-zakat-unsil.vercel.app';
+        }
+        $this->loginUrl = "{$frontendUrl}/masuk-muzakki";
     }
 
     /**
@@ -34,8 +39,11 @@ class MuzakkiCredentialsMail extends Mailable
      */
     public function envelope(): Envelope
     {
+        $fromAddress = config('mail.from.address') ?: env('MAIL_FROM_ADDRESS', 'noreply@upz.unsil.ac.id');
+        $fromName = config('mail.from.name') ?: env('MAIL_FROM_NAME', 'UPZ Zakat UNSIL');
+
         return new Envelope(
-            from: new Address('noreply@upz.unsil.ac.id', 'UPZ Zakat UNSIL'),
+            from: new Address($fromAddress, $fromName),
             subject: 'Akun Muzakki UPZ Zakat UNSIL Anda',
         );
     }
