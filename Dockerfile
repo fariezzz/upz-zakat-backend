@@ -41,4 +41,8 @@ RUN chown -R www-data:www-data /var/www/html \
 
 EXPOSE 80
 
-CMD ["/usr/bin/supervisord", "-c", "/etc/supervisor/conf.d/supervisord.conf"]
+# Copy entrypoint script
+COPY docker-run.sh /usr/local/bin/docker-run.sh
+RUN chmod +x /usr/local/bin/docker-run.sh
+
+CMD ["/usr/local/bin/docker-run.sh"]
