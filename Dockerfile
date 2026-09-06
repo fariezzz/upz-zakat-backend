@@ -7,7 +7,8 @@ RUN apk add --no-cache \
     supervisor \
     curl \
     zip \
-    unzip
+    unzip \
+    gettext
 
 RUN install-php-extensions pdo_mysql pdo_pgsql pgsql mbstring exif pcntl bcmath gd intl zip
 
@@ -20,8 +21,35 @@ RUN mkdir -p /var/lib/nginx/tmp/client_body && \
     chown -R www-data:www-data /var/lib/nginx && \
     chmod -R 777 /var/lib/nginx/tmp
 
+# Create supervisor directory
+RUN mkdir -p /etc/supervisor/conf.d
+
 WORKDIR /var/www/html
+
+# Copy application files
+COPY . /var/www/html
+
+# Install Composer (dependency manager PHP)
+COPY --from=composer:2 /usr/bin/composer /usr/bin/composer
+
+# Install PHP dependencies (tanpa dev, dengan autoload optimization)
+RUN composer install --no-dev --optimize-autoloader --no-interaction --no-progress
+
+# Copy supervisor config to correct location
+COPY docker/supervisord.conf /etc/supervisor/conf.d/supervisord.conf
+
+# Copy nginx template
+COPY docker/nginx.conf.template /etc/nginx/templates/default.conf.template
+
+# Set permissions
+RUN chown -R www-data:www-data /var/www/html \
+    && chmod -R 755 /var/www/html/storage \
+    && chmod -R 755 /var/www/html/bootstrap/cache
 
 EXPOSE 80
 
-CMD ["/usr/bin/supervisord", "-c", "/etc/supervisor/conf.d/supervisord.conf"]
+# Copy entrypoint script
+COPY docker-run.sh /usr/local/bin/docker-run.sh
+RUN chmod +x /usr/local/bin/docker-run.sh
+
+CMD ["/usr/local/bin/docker-run.sh"]
