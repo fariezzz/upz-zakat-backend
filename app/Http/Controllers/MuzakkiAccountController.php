@@ -177,13 +177,19 @@ class MuzakkiAccountController extends Controller
         try {
             $whatsappServiceUrl = rtrim(env('WHATSAPP_SERVICE_URL', 'http://localhost:3001'), '/');
 
+            $frontendUrl = rtrim((string) (env('FRONTEND_URL') ?: env('APP_URL', 'https://upz.unsil.ac.id')), '/');
+            if (str_contains($frontendUrl, 'backend') || str_contains($frontendUrl, ':8000')) {
+                $frontendUrl = 'https://upz-zakat-unsil.vercel.app';
+            }
+            $loginUrl = "{$frontendUrl}/masuk-muzakki";
+
             $message = "🔐 *Akun UPZ Zakat UNSIL Anda*\n\n"
                 . "Assalamu'alaikum *{$nama}*,\n\n"
                 . "Akun muzakki Anda telah berhasil dibuat!\n\n"
                 . "📧 Email/No HP: *{$email}*\n"
                 . "🔑 Password: *{$password}*\n\n"
                 . "Silakan login di:\n"
-                . "https://upz.unsil.ac.id/masuk-muzakki\n\n"
+                . "{$loginUrl}\n\n"
                 . "⚠️ *Penting:* Segera ganti password Anda setelah login pertama kali untuk keamanan akun.\n\n"
                 . "_Pesan otomatis dari UPZ Zakat Universitas Siliwangi_";
 
