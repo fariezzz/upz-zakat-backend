@@ -2,23 +2,17 @@
 
 return [
 
-    /*
-    |--------------------------------------------------------------------------
-    | Cross-Origin Resource Sharing (CORS) Configuration
-    |--------------------------------------------------------------------------
-    |
-    | Mengizinkan frontend React (localhost:5173) mengakses API Laravel.
-    | Di production, ganti allowed_origins dengan domain produksi.
-    |
-    */
-
     'paths' => ['api/*', 'sanctum/csrf-cookie'],
 
     'allowed_methods' => ['*'],
 
-    'allowed_origins' => ['*'],
+    'allowed_origins' => [
+        'https://upz-zakat-unsil.vercel.app',
+        'http://localhost:3000',
+        'http://localhost:5173',
+    ],
 
-    'allowed_origins_patterns' => ['/\.vercel\.app$/'],
+    'allowed_origins_patterns' => [],
 
     'allowed_headers' => ['*'],
 
@@ -26,6 +20,6 @@ return [
 
     'max_age' => 0,
 
-    'supports_credentials' => true,
+    'supports_credentials' => false,
 
 ];
