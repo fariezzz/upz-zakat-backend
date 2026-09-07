@@ -5,6 +5,7 @@ namespace App\Http\Controllers;
 use App\Models\Muzakki;
 use App\Models\ZakatAgreementRequest;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Cache;
 
 class ZakatAgreementController extends Controller
 {
@@ -98,11 +99,16 @@ class ZakatAgreementController extends Controller
     /**
      * GET /api/zakat-requests/pending-count  (PROTECTED)
      * Mengembalikan jumlah request yang masih pending (untuk badge notifikasi).
+     * Cached selama 30 detik untuk mengurangi load database.
      */
     public function pendingCount()
     {
+        $count = Cache::remember('zakat_pending_count', 60, function () {
+            return ZakatAgreementRequest::where('status', 'pending')->count();
+        });
+
         return response()->json([
-            'count' => ZakatAgreementRequest::where('status', 'pending')->count(),
+            'count' => $count,
         ]);
     }
 
@@ -141,6 +147,9 @@ class ZakatAgreementController extends Controller
             'diproses_at'   => now(),
         ]);
 
+        // Clear cache karena pending count berubah
+        Cache::forget('zakat_pending_count');
+
         return response()->json([
             'message' => 'Permohonan disetujui dan data kesepakatan muzakki telah diperbarui.',
             'request' => $req->fresh()->load('muzakki'),
@@ -165,6 +174,9 @@ class ZakatAgreementController extends Controller
             'diproses_oleh' => $request->user()->id,
             'diproses_at'   => now(),
         ]);
+
+        // Clear cache karena pending count berubah
+        Cache::forget('zakat_pending_count');
 
         return response()->json([
             'message' => 'Permohonan ditolak.',
