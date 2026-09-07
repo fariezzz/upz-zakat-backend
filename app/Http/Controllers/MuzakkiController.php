@@ -183,7 +183,13 @@ class MuzakkiController extends Controller
             $sum = 0;
             $labels = [];
             foreach ($kesepakatan as $item) {
-                $sum += (float) ($item['nominal'] ?? 0);
+                // Format baru dari DaftarMuzakkiUnsilPage: {komponen, nominal (penghasilan), zakat (tagihan)}
+                // Format lama dari seeder: {key, jenis, frekuensi, nominal (tagihan)}
+                if (isset($item['zakat'])) {
+                    $sum += (float) $item['zakat'];
+                } else {
+                    $sum += (float) ($item['nominal'] ?? 0);
+                }
                 if (!empty($item['jenis'])) {
                     $labels[] = $item['jenis'];
                 }

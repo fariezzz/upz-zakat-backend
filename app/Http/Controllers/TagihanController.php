@@ -91,13 +91,20 @@ class TagihanController extends Controller
             if (!empty($kesepakatan)) {
                 foreach ($kesepakatan as $k) {
                     $frekuensi = strtolower($k['frekuensi'] ?? 'bulanan');
-                    $nominalItem = (float) ($k['nominal'] ?? 0);
+
+                    // Format baru dari DaftarMuzakkiUnsilPage: {komponen, nominal (penghasilan), zakat (tagihan)}
+                    // Format lama dari seeder: {key, jenis, frekuensi, nominal (tagihan)}
+                    if (isset($k['zakat'])) {
+                        $nominalItem = (float) $k['zakat'];
+                    } else {
+                        $nominalItem = (float) ($k['nominal'] ?? 0);
+                    }
                     
                     $rincianKesepakatan[] = [
-                        'jenis'     => $k['jenis'] ?? 'Zakat',
+                        'jenis'     => $k['jenis'] ?? ($k['komponen'] ?? 'Zakat'),
                         'frekuensi' => $frekuensi,
                         'nominal'   => $nominalItem,
-                        'detail'    => $k['detail'] ?? $frekuensi,
+                        'detail'    => $k['detail'] ?? ($k['komponen'] ?? $frekuensi),
                     ];
                 }
             }

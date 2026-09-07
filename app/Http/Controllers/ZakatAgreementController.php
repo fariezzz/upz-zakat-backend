@@ -122,7 +122,10 @@ class ZakatAgreementController extends Controller
         $muzakki = $req->muzakki;
         if ($muzakki) {
             $perubahan = $req->perubahan_diajukan;
-            $totalNominal = collect($perubahan)->sum('nominal');
+            // Hitung total: gunakan field 'zakat' jika ada (format baru), fallback ke 'nominal' (format lama)
+            $totalNominal = collect($perubahan)->sum(function ($item) {
+                return isset($item['zakat']) ? (float) $item['zakat'] : (float) ($item['nominal'] ?? 0);
+            });
 
             $muzakki->update([
                 'kesepakatan_zakat' => $perubahan,
