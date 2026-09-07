@@ -513,7 +513,7 @@ class MuzakkiController extends Controller
             if (str_contains($frontendUrl, 'backend') || str_contains($frontendUrl, ':8000')) {
                 $frontendUrl = 'https://upz-zakat-unsil.vercel.app';
             }
-            $loginUrl = "{$frontendUrl}/masuk-muzakki";
+            $loginUrl = "{$frontendUrl}/muzakki/masuk";
 
             $message = "🔐 *Akun UPZ Zakat UNSIL Anda*\n\n"
                 . "Assalamu'alaikum *{$nama}*,\n\n"
