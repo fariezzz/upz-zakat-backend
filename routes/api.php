@@ -21,6 +21,11 @@ use Illuminate\Support\Facades\Route;
 // ——————————————————————————————————
 // Public: Halaman Utama (tanpa auth)
 // ——————————————————————————————————
+// Test endpoints
+Route::get('/test/ping', [\App\Http\Controllers\TestController::class, 'ping']);
+Route::get('/test/db-ping', [\App\Http\Controllers\TestController::class, 'dbPing']);
+Route::get('/test/muzakki-count', [\App\Http\Controllers\TestController::class, 'countMuzakki']);
+
 Route::post('/donasi', [DonasiController::class, 'store']);
 Route::get('/public/program', [ProgramController::class, 'publicList']);
 Route::get('/public/laporan', [LaporanController::class, 'publicReport']);

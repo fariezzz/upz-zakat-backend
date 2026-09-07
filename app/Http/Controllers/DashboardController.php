@@ -46,6 +46,7 @@ class DashboardController extends Controller
     {
         // 'all' = semua waktu, angka = filter per tahun
         $tahun = $request->query('tahun', now()->year);
+        $user = $request->user();
 
         return response()->json([
             'stats'         => $this->buildStats($tahun),
@@ -53,6 +54,13 @@ class DashboardController extends Controller
             'grafik'        => $this->buildGrafik($tahun),
             'transaksi'     => $this->buildTransaksiTerbaru(5),
             'program'       => $this->buildProgramAktif('aktif', $tahun),
+            'user'          => $user ? [
+                'id'    => $user->id,
+                'name'  => $user->name,
+                'email' => $user->email,
+                'role'  => $user->role,
+            ] : null,
+            'pending_requests' => \App\Models\ZakatAgreementRequest::where('status', 'pending')->count(),
         ]);
     }
 
@@ -65,94 +73,101 @@ class DashboardController extends Controller
      */
     private function buildStats($tahun): array
     {
-        $isAll = ($tahun === 'all');
+        // Cache stats selama 5 menit
+        $cacheKey = 'dashboard_stats_' . $tahun;
+        return \Illuminate\Support\Facades\Cache::remember($cacheKey, 300, function () use ($tahun) {
+            $isAll = ($tahun === 'all');
 
-        $qMasuk  = fn() => Transaksi::where('jenis', 'masuk');
-        $qKeluar = fn() => Transaksi::where('jenis', 'keluar');
+            $qMasuk  = fn() => Transaksi::where('jenis', 'masuk');
+            $qKeluar = fn() => Transaksi::where('jenis', 'keluar');
 
-        $terkumpul   = $isAll ? $qMasuk()->sum('nominal')  : $qMasuk()->where('tahun', $tahun)->sum('nominal');
-        $disalurkan  = $isAll ? $qKeluar()->sum('nominal') : $qKeluar()->where('tahun', $tahun)->sum('nominal');
-        $saldoKasBank = $qMasuk()->sum('nominal') - $qKeluar()->sum('nominal');
+            $terkumpul   = $isAll ? $qMasuk()->sum('nominal')  : $qMasuk()->where('tahun', $tahun)->sum('nominal');
+            $disalurkan  = $isAll ? $qKeluar()->sum('nominal') : $qKeluar()->where('tahun', $tahun)->sum('nominal');
+            $saldoKasBank = $qMasuk()->sum('nominal') - $qKeluar()->sum('nominal');
 
-        // Perbandingan YoY hanya relevan jika filter per-tahun
-        $terkumpulLalu  = 0;
-        $disalurkanLalu = 0;
-        $muzakkiLalu    = 0;
+            // Perbandingan YoY hanya relevan jika filter per-tahun
+            $terkumpulLalu  = 0;
+            $disalurkanLalu = 0;
+            $muzakkiLalu    = 0;
 
-        if (!$isAll) {
-            $tahunLalu      = $tahun - 1;
-            $terkumpulLalu  = $qMasuk()->where('tahun', $tahunLalu)->sum('nominal');
-            $disalurkanLalu = $qKeluar()->where('tahun', $tahunLalu)->sum('nominal');
-            $muzakkiLalu    = Muzakki::whereHas('transaksi', fn($q) => $q->where('tahun', $tahunLalu))->count();
-        }
+            if (!$isAll) {
+                $tahunLalu      = $tahun - 1;
+                $terkumpulLalu  = $qMasuk()->where('tahun', $tahunLalu)->sum('nominal');
+                $disalurkanLalu = $qKeluar()->where('tahun', $tahunLalu)->sum('nominal');
+                $muzakkiLalu    = Muzakki::whereHas('transaksi', fn($q) => $q->where('tahun', $tahunLalu))->count();
+            }
 
-        $muzakkiTrx = Muzakki::whereHas('transaksi', fn($q) => $q->where('tahun', $tahun))->count();
-        $muzakki    = $isAll ? Muzakki::count() : ($muzakkiTrx > 0 ? $muzakkiTrx : Muzakki::count());
+            $muzakkiTrx = $isAll ? 0 : Muzakki::whereHas('transaksi', fn($q) => $q->where('tahun', $tahun))->count();
+            $muzakki    = $isAll ? Muzakki::where('tipe_muzakki', 'terdaftar')->count() : ($muzakkiTrx > 0 ? $muzakkiTrx : Muzakki::where('tipe_muzakki', 'terdaftar')->count());
 
-
-        return [
-            'totalDanaTerkumpul'      => (int) $terkumpul,
-            'totalDanaDisalurkan'     => (int) $disalurkan,
-            'saldoKasBank'            => (int) $saldoKasBank,
-            'totalMuzakki'            => (int) $muzakki,
-            'perubahanDanaTerkumpul'  => $isAll ? null : $this->hitungPerubahan($terkumpul, $terkumpulLalu),
-            'perubahanDanaDisalurkan' => $isAll ? null : $this->hitungPerubahan($disalurkan, $disalurkanLalu),
-            'perubahanMuzakki'        => $isAll ? null : $this->hitungPerubahan($muzakki, $muzakkiLalu),
-        ];
+            return [
+                'totalDanaTerkumpul'      => (int) $terkumpul,
+                'totalDanaDisalurkan'     => (int) $disalurkan,
+                'saldoKasBank'            => (int) $saldoKasBank,
+                'totalMuzakki'            => (int) $muzakki,
+                'perubahanDanaTerkumpul'  => $isAll ? null : $this->hitungPerubahan($terkumpul, $terkumpulLalu),
+                'perubahanDanaDisalurkan' => $isAll ? null : $this->hitungPerubahan($disalurkan, $disalurkanLalu),
+                'perubahanMuzakki'        => $isAll ? null : $this->hitungPerubahan($muzakki, $muzakkiLalu),
+            ];
+        });
     }
 
     private function buildRingkasanDana($tahun): array
     {
-        $isAll = ($tahun === 'all');
+        // Cache ringkasan dana selama 5 menit
+        $cacheKey = 'dashboard_ringkasan_' . $tahun;
+        return \Illuminate\Support\Facades\Cache::remember($cacheKey, 300, function () use ($tahun) {
+            $isAll = ($tahun === 'all');
 
-        $kategoriColors = [
-            'Zakat'        => '#2e7d38',
-            'Infaq'        => '#3b82f6',
-            'Sedekah'      => '#eab308',
-            'Dana Lainnya' => '#a855f7',
-        ];
-
-        $query = Transaksi::where('jenis', 'masuk')
-            ->select('kategori', DB::raw('SUM(nominal) as total'))
-            ->groupBy('kategori');
-
-        if (!$isAll) {
-            $query->where('tahun', $tahun);
-        }
-
-        $rows = $query->get();
-
-        $groupedData = [
-            'Zakat'        => 0,
-            'Infaq'        => 0,
-            'Sedekah'      => 0,
-            'Dana Lainnya' => 0,
-        ];
-
-        foreach ($rows as $row) {
-            $cat = $row->kategori;
-            if (stripos($cat, 'Zakat') !== false) {
-                $groupedData['Zakat'] += $row->total;
-            } elseif (isset($groupedData[$cat])) {
-                $groupedData[$cat] += $row->total;
-            } else {
-                $groupedData['Dana Lainnya'] += $row->total;
-            }
-        }
-
-        $grandTotal = array_sum($groupedData);
-        $result = [];
-
-        foreach ($groupedData as $name => $total) {
-            $result[] = [
-                'name'    => $name,
-                'value'   => (int) $total,
-                'percent' => $grandTotal > 0 ? round(($total / $grandTotal) * 100, 1) : 0,
-                'color'   => $kategoriColors[$name],
+            $kategoriColors = [
+                'Zakat'        => '#2e7d38',
+                'Infaq'        => '#3b82f6',
+                'Sedekah'      => '#eab308',
+                'Dana Lainnya' => '#a855f7',
             ];
-        }
 
-        return $result;
+            $query = Transaksi::where('jenis', 'masuk')
+                ->select('kategori', DB::raw('SUM(nominal) as total'))
+                ->groupBy('kategori');
+
+            if (!$isAll) {
+                $query->where('tahun', $tahun);
+            }
+
+            $rows = $query->get();
+
+            $groupedData = [
+                'Zakat'        => 0,
+                'Infaq'        => 0,
+                'Sedekah'      => 0,
+                'Dana Lainnya' => 0,
+            ];
+
+            foreach ($rows as $row) {
+                $cat = $row->kategori;
+                if (stripos($cat, 'Zakat') !== false) {
+                    $groupedData['Zakat'] += $row->total;
+                } elseif (isset($groupedData[$cat])) {
+                    $groupedData[$cat] += $row->total;
+                } else {
+                    $groupedData['Dana Lainnya'] += $row->total;
+                }
+            }
+
+            $grandTotal = array_sum($groupedData);
+            $result = [];
+
+            foreach ($groupedData as $name => $total) {
+                $result[] = [
+                    'name'    => $name,
+                    'value'   => (int) $total,
+                    'percent' => $grandTotal > 0 ? round(($total / $grandTotal) * 100, 1) : 0,
+                    'color'   => $kategoriColors[$name],
+                ];
+            }
+
+            return $result;
+        });
     }
 
     private function buildGrafik($tahun): array

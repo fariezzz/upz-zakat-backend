@@ -14,7 +14,7 @@ class TransaksiController extends Controller
      */
     public function indexPengumpulan(Request $request)
     {
-        $query = Transaksi::with('muzakki')
+        $query = Transaksi::with('muzakki:id,nama')
             ->where('jenis', 'masuk')
             ->when($request->search, function ($q) use ($request) {
                 $q->where(function ($inner) use ($request) {
@@ -27,7 +27,19 @@ class TransaksiController extends Controller
             ->when($request->tahun && (int)$request->tahun !== 0, fn($q) => $q->where('tahun', (int) $request->tahun))
             ->orderByDesc('created_at');
 
-        $totalNominal = (clone $query)->sum('nominal');
+        // Optimasi: sum tanpa clone, gunakan query terpisah yang lebih efisien
+        $totalNominal = Transaksi::where('jenis', 'masuk')
+            ->when($request->kategori, fn($q) => $q->where('kategori', $request->kategori))
+            ->when($request->bulan && (int)$request->bulan !== 0, fn($q) => $q->where('bulan', (int) $request->bulan))
+            ->when($request->tahun && (int)$request->tahun !== 0, fn($q) => $q->where('tahun', (int) $request->tahun))
+            ->when($request->search, function ($q) use ($request) {
+                $q->where(function ($inner) use ($request) {
+                    $inner->where('kode', 'ilike', "%{$request->search}%")
+                          ->orWhereHas('muzakki', fn($m) => $m->where('nama', 'ilike', "%{$request->search}%"));
+                });
+            })
+            ->sum('nominal');
+
         $perPage = min((int) $request->get('per_page', 10), 100);
         $data    = $query->paginate($perPage);
 
@@ -58,7 +70,7 @@ class TransaksiController extends Controller
      */
     public function indexPenyaluran(Request $request)
     {
-        $query = Transaksi::with(['mustahik', 'program'])
+        $query = Transaksi::with(['mustahik:id,nama', 'program:id,nama'])
             ->where('jenis', 'keluar')
             ->when($request->search, function ($q) use ($request) {
                 $q->where(function ($inner) use ($request) {
@@ -70,7 +82,18 @@ class TransaksiController extends Controller
             ->when($request->tahun && (int)$request->tahun !== 0, fn($q) => $q->where('tahun', (int) $request->tahun))
             ->orderByDesc('created_at');
 
-        $totalNominal = (clone $query)->sum('nominal');
+        // Optimasi: sum tanpa clone
+        $totalNominal = Transaksi::where('jenis', 'keluar')
+            ->when($request->bulan && (int)$request->bulan !== 0, fn($q) => $q->where('bulan', (int) $request->bulan))
+            ->when($request->tahun && (int)$request->tahun !== 0, fn($q) => $q->where('tahun', (int) $request->tahun))
+            ->when($request->search, function ($q) use ($request) {
+                $q->where(function ($inner) use ($request) {
+                    $inner->where('kode', 'ilike', "%{$request->search}%")
+                          ->orWhereHas('mustahik', fn($m) => $m->where('nama', 'ilike', "%{$request->search}%"));
+                });
+            })
+            ->sum('nominal');
+
         $perPage = min((int) $request->get('per_page', 10), 100);
         $data    = $query->paginate($perPage);
 

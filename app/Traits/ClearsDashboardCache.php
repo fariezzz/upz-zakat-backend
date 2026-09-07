@@ -31,22 +31,29 @@ trait ClearsDashboardCache
     {
         $tahun = now()->year;
 
-        // Stats: cache per tahun + tahun lalu (karena hitung perubahan YoY)
-        Cache::forget("dashboard-stats-{$tahun}");
-        Cache::forget("dashboard-stats-" . ($tahun - 1));
-
-        // Grafik: cache per tahun
-        Cache::forget("dashboard-grafik-{$tahun}");
-        Cache::forget("dashboard-grafik-" . ($tahun - 1));
+        // Stats dashboard: cache per tahun + tahun lalu (karena hitung perubahan YoY)
+        Cache::forget("dashboard_stats_{$tahun}");
+        Cache::forget("dashboard_stats_" . ($tahun - 1));
+        Cache::forget("dashboard_stats_all");
 
         // Ringkasan dana: cache per tahun
+        Cache::forget("dashboard_ringkasan_{$tahun}");
+        Cache::forget("dashboard_ringkasan_" . ($tahun - 1));
+        Cache::forget("dashboard_ringkasan_all");
+
+
+
+        // Muzakki stats: clear semua variant
+        Cache::forget("muzakki_stats_");
+        Cache::forget("muzakki_stats_" . md5(''));
+        Cache::forget("muzakki_stats_" . md5('dosen_staf'));
+        Cache::forget("muzakki_stats_" . md5('umum'));
+
+        // Legacy keys (backward compatibility)
+        Cache::forget("dashboard-stats-{$tahun}");
+        Cache::forget("dashboard-grafik-{$tahun}");
         Cache::forget("dashboard-ringkasan-dana-{$tahun}");
-        Cache::forget("dashboard-ringkasan-dana-" . ($tahun - 1));
-
-        // Transaksi terbaru: satu key global (tidak per tahun)
         Cache::forget('dashboard-transaksi-terbaru');
-
-        // Program aktif: cache per tahun
         Cache::forget("dashboard-program-aktif-{$tahun}");
     }
 }

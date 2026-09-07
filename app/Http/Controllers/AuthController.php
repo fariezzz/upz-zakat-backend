@@ -96,6 +96,8 @@ class AuthController extends Controller
 
         $user->update($validated);
 
+
+
         return response()->json([
             'message' => 'Profil berhasil diperbarui.',
             'user'    => [
@@ -131,6 +133,8 @@ class AuthController extends Controller
         $user->update([
             'password' => Hash::make($request->new_password),
         ]);
+
+
 
         return response()->json([
             'message' => 'Password berhasil diubah.',
