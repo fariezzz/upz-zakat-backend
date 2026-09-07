@@ -31,7 +31,7 @@ class MuzakkiCredentialsMail extends Mailable
         if (str_contains($frontendUrl, 'backend') || str_contains($frontendUrl, ':8000')) {
             $frontendUrl = 'https://upz-zakat-unsil.vercel.app';
         }
-        $this->loginUrl = "{$frontendUrl}/masuk-muzakki";
+        $this->loginUrl = "{$frontendUrl}/muzakki/masuk";
     }
 
     /**
