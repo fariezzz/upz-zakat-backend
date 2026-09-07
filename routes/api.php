@@ -7,6 +7,7 @@ use App\Http\Controllers\DonasiController;
 use App\Http\Controllers\JurnalController;
 use App\Http\Controllers\LaporanController;
 use App\Http\Controllers\MuzakkiController;
+use App\Http\Controllers\MuzakkiExportController;
 use App\Http\Controllers\MuzakkiAccountController;
 use App\Http\Controllers\MustahikController;
 use App\Http\Controllers\ProgramController;
@@ -71,9 +72,10 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::get('/transaksi', [DashboardController::class, 'transaksiTerbaru']);
     Route::get('/program',   [DashboardController::class, 'programAktif']);
 
-    // ——————————————————————————
+    // ——————————————————————————————————
     // Muzakki Routes
-    // ——————————————————————————
+    // ——————————————————————————————————
+    Route::get('/muzakki/export',      [MuzakkiExportController::class, 'export']); // export Excel
     Route::get('/muzakki/options',     [MuzakkiController::class, 'options']); // combobox
     Route::get('/muzakki',             [MuzakkiController::class, 'index']);
     Route::post('/muzakki',            [MuzakkiController::class, 'store']);
