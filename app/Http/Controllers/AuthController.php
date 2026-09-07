@@ -70,16 +70,14 @@ class AuthController extends Controller
     public function me(Request $request)
     {
         $user = $request->user();
-        $cacheKey = 'auth_me_' . $user->id;
-        return \Illuminate\Support\Facades\Cache::remember($cacheKey, 60, function () use ($user) {
-            return response()->json([
-                'id'    => $user->id,
-                'name'  => $user->name,
-                'email' => $user->email,
-                'role'  => $user->role ?? 'administrator',
-                'created_at' => $user->created_at,
-            ]);
-        });
+
+        return response()->json([
+            'id'    => $user->id,
+            'name'  => $user->name,
+            'email' => $user->email,
+            'role'  => $user->role ?? 'administrator',
+            'created_at' => $user->created_at,
+        ]);
     }
 
     /**
@@ -98,8 +96,7 @@ class AuthController extends Controller
 
         $user->update($validated);
 
-        // Clear cache for this user
-        \Illuminate\Support\Facades\Cache::forget('auth_me_' . $user->id);
+
 
         return response()->json([
             'message' => 'Profil berhasil diperbarui.',
@@ -137,8 +134,7 @@ class AuthController extends Controller
             'password' => Hash::make($request->new_password),
         ]);
 
-        // Clear cache for this user
-        \Illuminate\Support\Facades\Cache::forget('auth_me_' . $user->id);
+
 
         return response()->json([
             'message' => 'Password berhasil diubah.',

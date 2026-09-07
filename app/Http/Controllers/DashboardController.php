@@ -48,25 +48,20 @@ class DashboardController extends Controller
         $tahun = $request->query('tahun', now()->year);
         $user = $request->user();
 
-        // Cache seluruh response selama 2 menit
-        $cacheKey = 'dashboard_all_' . $tahun . '_' . ($user ? $user->id : 'guest');
-        return \Illuminate\Support\Facades\Cache::remember($cacheKey, 120, function () use ($tahun, $user) {
-            return response()->json([
-                'stats'         => $this->buildStats($tahun),
-                'ringkasanDana' => $this->buildRingkasanDana($tahun),
-                'grafik'        => $this->buildGrafik($tahun),
-                'transaksi'     => $this->buildTransaksiTerbaru(5),
-                'program'       => $this->buildProgramAktif('aktif', $tahun),
-                // Tambahkan data user dan pending count agar frontend tidak perlu request terpisah
-                'user'          => $user ? [
-                    'id'    => $user->id,
-                    'name'  => $user->name,
-                    'email' => $user->email,
-                    'role'  => $user->role,
-                ] : null,
-                'pending_requests' => \App\Models\ZakatAgreementRequest::where('status', 'pending')->count(),
-            ]);
-        });
+        return response()->json([
+            'stats'         => $this->buildStats($tahun),
+            'ringkasanDana' => $this->buildRingkasanDana($tahun),
+            'grafik'        => $this->buildGrafik($tahun),
+            'transaksi'     => $this->buildTransaksiTerbaru(5),
+            'program'       => $this->buildProgramAktif('aktif', $tahun),
+            'user'          => $user ? [
+                'id'    => $user->id,
+                'name'  => $user->name,
+                'email' => $user->email,
+                'role'  => $user->role,
+            ] : null,
+            'pending_requests' => \App\Models\ZakatAgreementRequest::where('status', 'pending')->count(),
+        ]);
     }
 
     // ——————————————————————————————————

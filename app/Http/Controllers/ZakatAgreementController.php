@@ -103,9 +103,7 @@ class ZakatAgreementController extends Controller
      */
     public function pendingCount()
     {
-        $count = Cache::remember('zakat_pending_count', 60, function () {
-            return ZakatAgreementRequest::where('status', 'pending')->count();
-        });
+        $count = ZakatAgreementRequest::where('status', 'pending')->count();
 
         return response()->json([
             'count' => $count,

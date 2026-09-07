@@ -41,6 +41,8 @@ trait ClearsDashboardCache
         Cache::forget("dashboard_ringkasan_" . ($tahun - 1));
         Cache::forget("dashboard_ringkasan_all");
 
+
+
         // Muzakki stats: clear semua variant
         Cache::forget("muzakki_stats_");
         Cache::forget("muzakki_stats_" . md5(''));

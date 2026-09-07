@@ -352,34 +352,31 @@ class MuzakkiController extends Controller
 
         // Cache stats untuk menghindari query berulang
         // Stats ini jarang berubah, jadi kita hitung sekali saja jika belum ada di cache
-        $cacheKey = 'muzakki_stats_' . md5($request->query('kategori', ''));
-        $stats = \Illuminate\Support\Facades\Cache::remember($cacheKey, 300, function () {
-            $totalDosenStaf = Muzakki::where('tipe_muzakki', 'terdaftar')
-                ->where(function ($q) {
-                    $q->where('kategori', 'ilike', '%Dosen%')
-                      ->orWhere('kategori', 'ilike', '%Staf%')
-                      ->orWhere('kategori', 'ilike', '%Civitas%')
-                      ->orWhere(function ($q2) {
-                          $q2->whereNotNull('unit_kerja')
-                             ->where('unit_kerja', '!=', '')
-                             ->where('unit_kerja', '!=', 'Masyarakat Umum')
-                             ->where('unit_kerja', '!=', 'Umum');
-                      });
-                })->count();
+        $totalDosenStaf = Muzakki::where('tipe_muzakki', 'terdaftar')
+            ->where(function ($q) {
+                $q->where('kategori', 'ilike', '%Dosen%')
+                  ->orWhere('kategori', 'ilike', '%Staf%')
+                  ->orWhere('kategori', 'ilike', '%Civitas%')
+                  ->orWhere(function ($q2) {
+                      $q2->whereNotNull('unit_kerja')
+                         ->where('unit_kerja', '!=', '')
+                         ->where('unit_kerja', '!=', 'Masyarakat Umum')
+                         ->where('unit_kerja', '!=', 'Umum');
+                  });
+            })->count();
 
-            $totalUmum = Muzakki::where('tipe_muzakki', 'terdaftar')
-                ->where(function ($q) {
-                    $q->where('kategori', 'ilike', '%Umum%')
-                      ->orWhere(function ($q2) {
-                          $q2->whereNull('unit_kerja')
-                             ->orWhere('unit_kerja', '')
-                             ->orWhere('unit_kerja', 'Masyarakat Umum')
-                             ->orWhere('unit_kerja', 'Umum');
-                      });
-                })->count();
+        $totalUmum = Muzakki::where('tipe_muzakki', 'terdaftar')
+            ->where(function ($q) {
+                $q->where('kategori', 'ilike', '%Umum%')
+                  ->orWhere(function ($q2) {
+                      $q2->whereNull('unit_kerja')
+                         ->orWhere('unit_kerja', '')
+                         ->orWhere('unit_kerja', 'Masyarakat Umum')
+                         ->orWhere('unit_kerja', 'Umum');
+                  });
+            })->count();
 
-            return compact('totalDosenStaf', 'totalUmum');
-        });
+        $stats = compact('totalDosenStaf', 'totalUmum');
 
         return response()->json([
             'data'  => $data->items(),
