@@ -556,9 +556,6 @@ class MuzakkiController extends Controller
     private function sendEmailCredentials($email, $nama, $emailForLogin, $password)
     {
         try {
-            // Pastikan batas waktu SMTP maksimal 5 detik agar tidak menggantung response HTTP
-            config(['mail.mailers.smtp.timeout' => 5]);
-
             Mail::to($email)->send(new MuzakkiCredentialsMail(
                 $nama,
                 $emailForLogin,
