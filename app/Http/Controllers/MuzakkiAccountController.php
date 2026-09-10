@@ -114,10 +114,7 @@ class MuzakkiAccountController extends Controller
         $token = $user->createToken('muzakki-token')->plainTextToken;
 
         // Ambil data muzakki lengkap dari tabel muzakki
-        $muzakki = Muzakki::where('nip', $user->nip)
-            ->orWhere('email', $user->email)
-            ->orWhere('no_hp', $user->no_hp)
-            ->first();
+        $muzakki = $this->findMuzakkiForUser($user);
 
         return response()->json([
             'success' => true,
@@ -238,10 +235,7 @@ class MuzakkiAccountController extends Controller
         $user = $request->user();
 
         // Ambil data muzakki dari tabel muzakki
-        $muzakki = Muzakki::where('nip', $user->nip)
-            ->orWhere('email', $user->email)
-            ->orWhere('no_hp', $user->no_hp)
-            ->first();
+        $muzakki = $this->findMuzakkiForUser($user);
 
         if (!$muzakki) {
             return response()->json([
@@ -318,5 +312,34 @@ class MuzakkiAccountController extends Controller
                 }),
             ],
         ]);
+    }
+
+    /**
+     * Cari profil muzakki berdasarkan user yang login
+     */
+    private function findMuzakkiForUser(User $user)
+    {
+        return Muzakki::where(function ($query) use ($user) {
+            $hasCondition = false;
+
+            if (!empty($user->nip)) {
+                $query->where('nip', $user->nip);
+                $hasCondition = true;
+            }
+
+            if (!empty($user->email)) {
+                $hasCondition ? $query->orWhere('email', $user->email) : $query->where('email', $user->email);
+                $hasCondition = true;
+            }
+
+            if (!empty($user->no_hp)) {
+                $hasCondition ? $query->orWhere('no_hp', $user->no_hp) : $query->where('no_hp', $user->no_hp);
+                $hasCondition = true;
+            }
+
+            if (!$hasCondition) {
+                $query->whereRaw('1 = 0');
+            }
+        })->first();
     }
 }

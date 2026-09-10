@@ -111,7 +111,6 @@ jobs:
           # 3. Post-deploy Commands
           echo "==> Ensuring Laravel storage directories exist"
           docker compose exec -T upz-backend mkdir -p storage/framework/cache/data storage/framework/sessions storage/framework/testing storage/framework/views storage/app/public storage/logs
-          docker compose exec -T upz-backend chmod -R 777 storage bootstrap/cache
 
           echo "==> Running Migrations & Optimization"
           docker compose exec -T upz-backend php artisan migrate --force
@@ -119,6 +118,12 @@ jobs:
 
           echo "==> Linking Storage"
           docker compose exec -T upz-backend php artisan storage:link
+
+          # Set ownership ke user host dan group www-data (82 di Alpine) dengan permission 775
+          HOST_UID=$(id -u)
+          echo "==> Setting secure ownership (${HOST_UID}:82) and permissions (775)"
+          docker compose exec -T upz-backend chown -R ${HOST_UID}:82 storage bootstrap/cache
+          docker compose exec -T upz-backend chmod -R 775 storage bootstrap/cache
 
           # 4. Cleanup Old Releases
           echo "==> Cleanup (keep ${KEEP_RELEASES})"
@@ -128,7 +133,7 @@ jobs:
             FULL="${RELEASES_DIR}/${dir%/}"
             if [ "${FULL}" != "${CURRENT}" ]; then
               echo "    🗑️ ${dir}"
-              rm -rf "${dir}"
+              rm -rf "${dir}" || sudo rm -rf "${dir}" 2>/dev/null || true
             fi
           done
 
