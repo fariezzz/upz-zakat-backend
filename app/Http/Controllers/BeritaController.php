@@ -174,26 +174,39 @@ class BeritaController extends Controller
 
         $file = $request->file('image');
 
-        // Jika Cloudinary terkonfigurasi, simpan langsung ke CDN Cloudinary
-        if (env('CLOUDINARY_CLOUD_NAME') && env('CLOUDINARY_API_KEY') && env('CLOUDINARY_API_SECRET')) {
+        // Periksa konfigurasi Cloudinary dari config (bukan env langsung agar tetap bekerja saat config di-cache di Render)
+        $cloudinaryConfig = config('filesystems.disks.cloudinary');
+        $isCloudinaryConfigured = !empty($cloudinaryConfig['url']) || (
+            !empty($cloudinaryConfig['cloud']) &&
+            !empty($cloudinaryConfig['key']) &&
+            !empty($cloudinaryConfig['secret'])
+        );
+
+        if ($isCloudinaryConfigured) {
             try {
-                // Upload ke Cloudinary menggunakan disk
-                $path = $file->store('berita', 'cloudinary');
-                
-                // Dapatkan URL dari Cloudinary
-                $url = \Illuminate\Support\Facades\Storage::disk('cloudinary')->url($path);
-                
+                $cloudinary = app(\Cloudinary\Cloudinary::class);
+                $result = $cloudinary->uploadApi()->upload($file->getRealPath(), [
+                    'folder'        => 'berita',
+                    'resource_type' => 'image',
+                ]);
+
                 return response()->json([
                     'message' => 'Gambar berhasil diunggah ke cloud.',
-                    'url'     => $url,
-                    'path'    => $path,
+                    'url'     => $result['secure_url'],
+                    'path'    => $result['public_id'],
                 ]);
             } catch (\Throwable $e) {
-                \Illuminate\Support\Facades\Log::warning('Cloudinary upload error: ' . $e->getMessage());
+                \Illuminate\Support\Facades\Log::error('Cloudinary upload error: ' . $e->getMessage(), [
+                    'trace' => $e->getTraceAsString(),
+                ]);
+
+                return response()->json([
+                    'message' => 'Gagal mengunggah gambar ke Cloudinary: ' . $e->getMessage(),
+                ], 500);
             }
         }
 
-        // Simpan ke disk public dan kembalikan relative path agar portabel di semua environment
+        // Fallback hanya jika Cloudinary memang tidak dikonfigurasi (misal di local development offline)
         $path = $file->store('berita', 'public');
         $relativeUrl = '/storage/' . $path;
 

@@ -60,13 +60,30 @@ return [
             'report' => false,
         ],
 
-        'cloudinary' => [
-            'driver'  => 'cloudinary',
-            'cloud'   => env('CLOUDINARY_CLOUD_NAME'),
-            'key'     => env('CLOUDINARY_API_KEY'),
-            'secret'  => env('CLOUDINARY_API_SECRET'),
-            'secure'  => true,
-        ],
+        'cloudinary' => (function () {
+            $url = env('CLOUDINARY_URL');
+            $cloud = env('CLOUDINARY_CLOUD_NAME');
+            $key = env('CLOUDINARY_API_KEY') ?: env('CLOUDINARY_KEY');
+            $secret = env('CLOUDINARY_API_SECRET') ?: env('CLOUDINARY_SECRET');
+
+            if ($url) {
+                $parsed = parse_url($url);
+                if ($parsed && isset($parsed['host'])) {
+                    $cloud = $cloud ?: $parsed['host'];
+                    $key = $key ?: ($parsed['user'] ?? null);
+                    $secret = $secret ?: ($parsed['pass'] ?? null);
+                }
+            }
+
+            return [
+                'driver'  => 'cloudinary',
+                'url'     => $url,
+                'cloud'   => $cloud,
+                'key'     => $key,
+                'secret'  => $secret,
+                'secure'  => true,
+            ];
+        })(),
 
     ],
 
