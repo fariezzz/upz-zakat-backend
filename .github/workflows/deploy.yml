@@ -17,7 +17,6 @@ jobs:
     runs-on: ubuntu-latest
     environment:
       name: production
-      url: ${{ vars.PRODUCTION_URL }}
 
     steps:
     - name: Checkout code
@@ -51,12 +50,15 @@ jobs:
 
     # Connect to VPN if OVPN_CONFIG secret is provided
     - name: Connect to VPN
-      if: ${{ secrets.OVPN_CONFIG != '' }}
       env:
         OVPN_CONFIG: ${{ secrets.OVPN_CONFIG }}
         VPN_USER: ${{ secrets.VPN_USER }}
         VPN_PASS: ${{ secrets.VPN_PASS }}
       run: |
+        if [ -z "$OVPN_CONFIG" ]; then
+          echo "OVPN_CONFIG is not set. Skipping VPN connection."
+          exit 0
+        fi
         sudo apt-get update && sudo apt-get install -y openvpn
         echo "$OVPN_CONFIG" | base64 --decode > client.ovpn 2>/dev/null || echo "$OVPN_CONFIG" > client.ovpn
         printf "%s\n%s\n" "$VPN_USER" "$VPN_PASS" > auth.txt
