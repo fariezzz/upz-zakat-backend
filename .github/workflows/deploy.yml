@@ -48,6 +48,11 @@ jobs:
         du -sh deploy-pkg/app 2>/dev/null || true
         du -sh deploy-pkg/public 2>/dev/null || true
 
+        echo "🗜️ Compressing deployment package into single archive..."
+        tar -czf deploy-pkg.tar.gz -C deploy-pkg .
+        echo "📦 Archive size: $(du -sh deploy-pkg.tar.gz | cut -f1)"
+        rm -rf deploy-pkg
+
     # Connect to VPN if OVPN_CONFIG secret is provided
     - name: Connect to VPN
       env:
@@ -74,12 +79,12 @@ jobs:
         chmod 600 ~/.ssh/deploy_key
         ssh-keyscan -p ${{ secrets.VPS_PORT || 22 }} -H ${{ secrets.VPS_IP }} >> ~/.ssh/known_hosts 2>/dev/null
 
-    - name: Rsync to staging
+    - name: Transfer package to VPS
       run: |
-        rsync -az --no-o --no-g --delete \
+        rsync -az \
           -e "ssh -p ${{ secrets.VPS_PORT || 22 }} -i ~/.ssh/deploy_key" \
-          deploy-pkg/ \
-          ${{ secrets.VPS_USERNAME }}@${{ secrets.VPS_IP }}:${{ env.STAGING_DIR }}/
+          deploy-pkg.tar.gz \
+          ${{ secrets.VPS_USERNAME }}@${{ secrets.VPS_IP }}:/opt/apps/deploy-pkg.tar.gz
 
     - name: Deploy with atomic swap
       uses: appleboy/ssh-action@v1.2.0
@@ -97,7 +102,14 @@ jobs:
         script: |
           set -euo pipefail
 
-          # 1. Release Swapping
+          # 1. Extract package to staging directory
+          echo "==> Extracting deployment archive into staging"
+          rm -rf "${STAGING_DIR}"
+          mkdir -p "${STAGING_DIR}"
+          tar -xzf /opt/apps/deploy-pkg.tar.gz -C "${STAGING_DIR}"
+          rm -f /opt/apps/deploy-pkg.tar.gz
+
+          # 2. Release Swapping
           RELEASE_ID=$(date +%Y%m%d_%H%M%S)
           RELEASE_DIR="${RELEASES_DIR}/${RELEASE_ID}"
 
