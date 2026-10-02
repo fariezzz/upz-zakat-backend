@@ -44,58 +44,27 @@ class MuzakkiController extends Controller
         }
 
         if ($kategori === 'unsil' || $kategori === 'dosen_staf') {
-            $query->where(function ($q) {
-                $q->where('kategori', 'ilike', '%Dosen%')
-                  ->orWhere('kategori', 'ilike', '%Staf%')
-                  ->orWhere('kategori', 'ilike', '%Civitas%')
-                  ->orWhere(function ($q2) {
-                      $q2->whereNotNull('unit_kerja')
-                         ->where('unit_kerja', '!=', '')
-                         ->where('unit_kerja', '!=', 'Masyarakat Umum')
-                         ->where('unit_kerja', '!=', 'Umum');
-                  });
-            });
+            $query->dosenStaf();
         } elseif ($kategori === 'umum') {
-            $query->where(function ($q) {
-                $q->where('kategori', 'ilike', '%Umum%')
-                  ->orWhere(function ($q2) {
-                      $q2->whereNull('unit_kerja')
-                         ->orWhere('unit_kerja', '')
-                         ->orWhere('unit_kerja', 'Masyarakat Umum')
-                         ->orWhere('unit_kerja', 'Umum');
-                  });
-            });
+            $query->umum();
         }
 
         $allMuzakki = $query->orderBy('nama')->get();
 
-        $totalDosenStaf = Muzakki::where('tipe_muzakki', 'terdaftar')
-            ->where(function ($q) {
-                $q->where('kategori', 'ilike', '%Dosen%')
-                  ->orWhere('kategori', 'ilike', '%Staf%')
-                  ->orWhere('kategori', 'ilike', '%Civitas%')
-                  ->orWhere(function ($q2) {
-                      $q2->whereNotNull('unit_kerja')
-                         ->where('unit_kerja', '!=', '')
-                         ->where('unit_kerja', '!=', 'Masyarakat Umum')
-                         ->where('unit_kerja', '!=', 'Umum');
-                  });
-            })->count();
-
-        $totalUmum = Muzakki::where('tipe_muzakki', 'terdaftar')
-            ->where(function ($q) {
-                $q->where('kategori', 'ilike', '%Umum%')
-                  ->orWhere(function ($q2) {
-                      $q2->whereNull('unit_kerja')
-                         ->orWhere('unit_kerja', '')
-                         ->orWhere('unit_kerja', 'Masyarakat Umum')
-                         ->orWhere('unit_kerja', 'Umum');
-                  });
-            })->count();
+        $totalDosenStaf = Muzakki::where('tipe_muzakki', 'terdaftar')->dosenStaf()->count();
+        $totalUmum = Muzakki::where('tipe_muzakki', 'terdaftar')->umum()->count();
 
         $list = $allMuzakki->map(function ($m) {
-            $isUnsil = (!empty($m->kategori) && (stripos($m->kategori, 'Dosen') !== false || stripos($m->kategori, 'Staf') !== false || stripos($m->kategori, 'UNSIL') !== false))
-                || (!empty($m->unit_kerja) && !in_array($m->unit_kerja, ['Masyarakat Umum', 'Umum']));
+            $isUnsil = (!empty($m->kategori) && (
+                    stripos($m->kategori, 'Dosen') !== false ||
+                    stripos($m->kategori, 'Staf') !== false ||
+                    stripos($m->kategori, 'Civitas') !== false ||
+                    stripos($m->kategori, 'UNSIL') !== false
+                ))
+                || (empty($m->kategori) && (
+                    (!empty($m->unit_kerja) && !in_array($m->unit_kerja, ['Masyarakat Umum', 'Umum']))
+                    || !empty($m->nip)
+                ));
             
             $kategoriLabel = $m->kategori ?: ($isUnsil ? 'Dosen & Staf UNSIL' : 'Muzakki Umum');
 
@@ -321,28 +290,10 @@ class MuzakkiController extends Controller
         }
 
         if ($kategori = $request->query('kategori')) {
-            if ($kategori === 'dosen_staf' || $kategori === 'dosen/staf') {
-                $query->where(function ($q) {
-                    $q->where('kategori', 'ilike', '%Dosen%')
-                      ->orWhere('kategori', 'ilike', '%Staf%')
-                      ->orWhere('kategori', 'ilike', '%Civitas%')
-                      ->orWhere(function ($q2) {
-                          $q2->whereNotNull('unit_kerja')
-                             ->where('unit_kerja', '!=', '')
-                             ->where('unit_kerja', '!=', 'Masyarakat Umum')
-                             ->where('unit_kerja', '!=', 'Umum');
-                      });
-                });
+            if ($kategori === 'dosen_staf' || $kategori === 'dosen/staf' || $kategori === 'unsil') {
+                $query->dosenStaf();
             } elseif ($kategori === 'umum') {
-                $query->where(function ($q) {
-                    $q->where('kategori', 'ilike', '%Umum%')
-                      ->orWhere(function ($q2) {
-                          $q2->whereNull('unit_kerja')
-                             ->orWhere('unit_kerja', '')
-                             ->orWhere('unit_kerja', 'Masyarakat Umum')
-                             ->orWhere('unit_kerja', 'Umum');
-                      });
-                });
+                $query->umum();
             }
         }
 
@@ -352,29 +303,8 @@ class MuzakkiController extends Controller
 
         // Cache stats untuk menghindari query berulang
         // Stats ini jarang berubah, jadi kita hitung sekali saja jika belum ada di cache
-        $totalDosenStaf = Muzakki::where('tipe_muzakki', 'terdaftar')
-            ->where(function ($q) {
-                $q->where('kategori', 'ilike', '%Dosen%')
-                  ->orWhere('kategori', 'ilike', '%Staf%')
-                  ->orWhere('kategori', 'ilike', '%Civitas%')
-                  ->orWhere(function ($q2) {
-                      $q2->whereNotNull('unit_kerja')
-                         ->where('unit_kerja', '!=', '')
-                         ->where('unit_kerja', '!=', 'Masyarakat Umum')
-                         ->where('unit_kerja', '!=', 'Umum');
-                  });
-            })->count();
-
-        $totalUmum = Muzakki::where('tipe_muzakki', 'terdaftar')
-            ->where(function ($q) {
-                $q->where('kategori', 'ilike', '%Umum%')
-                  ->orWhere(function ($q2) {
-                      $q2->whereNull('unit_kerja')
-                         ->orWhere('unit_kerja', '')
-                         ->orWhere('unit_kerja', 'Masyarakat Umum')
-                         ->orWhere('unit_kerja', 'Umum');
-                  });
-            })->count();
+        $totalDosenStaf = Muzakki::where('tipe_muzakki', 'terdaftar')->dosenStaf()->count();
+        $totalUmum = Muzakki::where('tipe_muzakki', 'terdaftar')->umum()->count();
 
         $stats = compact('totalDosenStaf', 'totalUmum');
 
