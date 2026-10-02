@@ -6,14 +6,9 @@ return [
 
     'allowed_methods' => ['*'],
 
-    'allowed_origins' => array_values(array_filter([
-        env('FRONTEND_URL'),
-        'https://upz.lexatech.my.id',
-        'https://upz.unsil.ac.id',
-        'https://upz-zakat-unsil.vercel.app',
-        'http://localhost:5173',
-        'http://localhost:3000',
-    ])),
+    'allowed_origins' => array_values(array_filter(
+        explode(',', env('FRONTEND_URL', 'http://localhost:5173'))
+    )),
 
     'allowed_origins_patterns' => [],
 
