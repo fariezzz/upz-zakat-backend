@@ -37,28 +37,10 @@ class TagihanController extends Controller
             });
         }
 
-        if ($kategori === 'dosen_staf') {
-            $query->where(function ($q) {
-                $q->where('kategori', 'ilike', '%Dosen%')
-                  ->orWhere('kategori', 'ilike', '%Staf%')
-                  ->orWhere('kategori', 'ilike', '%Civitas%')
-                  ->orWhere(function ($q2) {
-                      $q2->whereNotNull('unit_kerja')
-                         ->where('unit_kerja', '!=', '')
-                         ->where('unit_kerja', '!=', 'Masyarakat Umum')
-                         ->where('unit_kerja', '!=', 'Umum');
-                  });
-            });
+        if ($kategori === 'dosen_staf' || $kategori === 'unsil') {
+            $query->dosenStaf();
         } elseif ($kategori === 'umum') {
-            $query->where(function ($q) {
-                $q->where('kategori', 'ilike', '%Umum%')
-                  ->orWhere(function ($q2) {
-                      $q2->whereNull('unit_kerja')
-                         ->orWhere('unit_kerja', '')
-                         ->orWhere('unit_kerja', 'Masyarakat Umum')
-                         ->orWhere('unit_kerja', 'Umum');
-                  });
-            });
+            $query->umum();
         }
 
         $allMuzakki = $query->orderBy('nama')->get();
@@ -167,8 +149,16 @@ class TagihanController extends Controller
                 if ($status === 'sebagian' && $statusBayar !== 'sebagian') continue;
             }
 
-            $isUnsil = (!empty($m->kategori) && (stripos($m->kategori, 'Dosen') !== false || stripos($m->kategori, 'Staf') !== false || stripos($m->kategori, 'UNSIL') !== false))
-                || (!empty($m->unit_kerja) && !in_array($m->unit_kerja, ['Masyarakat Umum', 'Umum']));
+            $isUnsil = (!empty($m->kategori) && (
+                    stripos($m->kategori, 'Dosen') !== false ||
+                    stripos($m->kategori, 'Staf') !== false ||
+                    stripos($m->kategori, 'Civitas') !== false ||
+                    stripos($m->kategori, 'UNSIL') !== false
+                ))
+                || (empty($m->kategori) && (
+                    (!empty($m->unit_kerja) && !in_array($m->unit_kerja, ['Masyarakat Umum', 'Umum']))
+                    || !empty($m->nip)
+                ));
 
             $items[] = [
                 'id'                => $m->id,

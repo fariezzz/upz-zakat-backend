@@ -13,12 +13,12 @@ class DatabaseSeeder extends Seeder
         DB::table('transaksi')->delete();
 
         $this->call([
-            UserSeeder::class,
-            MuzakkiSeeder::class,
-            MustahikSeeder::class,
-            ProgramSeeder::class,
-            // TransaksiSeeder::class,
             BeritaSeeder::class,
+            MustahikSeeder::class,
+            MuzakkiSeeder::class,
+            ProgramSeeder::class,
+            TransaksiSeeder::class,
+            UserSeeder::class,
         ]);
     }
 }

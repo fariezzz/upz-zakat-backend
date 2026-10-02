@@ -55,27 +55,9 @@ class MuzakkiExport implements FromCollection, WithHeadings, WithMapping, WithTi
         // Apply kategori filter
         if ($this->kategori) {
             if ($this->kategori === 'dosen_staf' || $this->kategori === 'unsil') {
-                $query->where(function ($q) {
-                    $q->where('kategori', 'ilike', '%Dosen%')
-                      ->orWhere('kategori', 'ilike', '%Staf%')
-                      ->orWhere('kategori', 'ilike', '%Civitas%')
-                      ->orWhere(function ($q2) {
-                          $q2->whereNotNull('unit_kerja')
-                             ->where('unit_kerja', '!=', '')
-                             ->where('unit_kerja', '!=', 'Masyarakat Umum')
-                             ->where('unit_kerja', '!=', 'Umum');
-                      });
-                });
+                $query->dosenStaf();
             } elseif ($this->kategori === 'umum') {
-                $query->where(function ($q) {
-                    $q->where('kategori', 'ilike', '%Umum%')
-                      ->orWhere(function ($q2) {
-                          $q2->whereNull('unit_kerja')
-                             ->orWhere('unit_kerja', '')
-                             ->orWhere('unit_kerja', 'Masyarakat Umum')
-                             ->orWhere('unit_kerja', 'Umum');
-                      });
-                });
+                $query->umum();
             }
         }
 
@@ -84,18 +66,23 @@ class MuzakkiExport implements FromCollection, WithHeadings, WithMapping, WithTi
 
         // Pisahkan Dosen/Staff dan Umum
         $dosenStaf = $allMuzakki->filter(function ($m) {
-            return (!empty($m->kategori) && 
-                   (stripos($m->kategori, 'Dosen') !== false || 
+            return (!empty($m->kategori) && (
+                    stripos($m->kategori, 'Dosen') !== false || 
                     stripos($m->kategori, 'Staf') !== false || 
-                    stripos($m->kategori, 'UNSIL') !== false))
-                || (!empty($m->unit_kerja) && 
-                    !in_array($m->unit_kerja, ['Masyarakat Umum', 'Umum', '', null]));
+                    stripos($m->kategori, 'Civitas') !== false ||
+                    stripos($m->kategori, 'UNSIL') !== false
+                ))
+                || (empty($m->kategori) && (
+                    (!empty($m->unit_kerja) && !in_array($m->unit_kerja, ['Masyarakat Umum', 'Umum', '', null]))
+                    || !empty($m->nip)
+                ));
         })->sortBy('nama');
 
         $umum = $allMuzakki->filter(function ($m) {
-            return (empty($m->kategori) || stripos($m->kategori, 'Umum') !== false)
-                || (empty($m->unit_kerja) || 
-                    in_array($m->unit_kerja, ['Masyarakat Umum', 'Umum', '']));
+            return (!empty($m->kategori) && stripos($m->kategori, 'Umum') !== false)
+                || (empty($m->kategori) && empty($m->nip) && (
+                    empty($m->unit_kerja) || in_array($m->unit_kerja, ['Masyarakat Umum', 'Umum', ''])
+                ));
         })->sortBy('nama');
 
         // Gabungkan: Dosen/Staff dulu, lalu Umum
@@ -137,12 +124,16 @@ class MuzakkiExport implements FromCollection, WithHeadings, WithMapping, WithTi
     public function map($muzakki): array
     {
         // Determine kategori
-        $isUnsil = (!empty($muzakki->kategori) && 
-                   (stripos($muzakki->kategori, 'Dosen') !== false || 
-                    stripos($muzakki->kategori, 'Staf') !== false || 
-                    stripos($muzakki->kategori, 'UNSIL') !== false))
-            || (!empty($muzakki->unit_kerja) && 
-                !in_array($muzakki->unit_kerja, ['Masyarakat Umum', 'Umum', '']));
+        $isUnsil = (!empty($muzakki->kategori) && (
+                stripos($muzakki->kategori, 'Dosen') !== false || 
+                stripos($muzakki->kategori, 'Staf') !== false || 
+                stripos($muzakki->kategori, 'Civitas') !== false ||
+                stripos($muzakki->kategori, 'UNSIL') !== false
+            ))
+            || (empty($muzakki->kategori) && (
+                (!empty($muzakki->unit_kerja) && !in_array($muzakki->unit_kerja, ['Masyarakat Umum', 'Umum', '']))
+                || !empty($muzakki->nip)
+            ));
 
         $kategoriLabel = $isUnsil ? 'Dosen & Staf UNSIL' : 'Muzakki Umum';
 

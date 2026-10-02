@@ -7,9 +7,9 @@ on:
 
 env:
   PHP_VERSION: "8.2"
-  STAGING_DIR: /opt/lexa/upz-backend-staging
-  RELEASES_DIR: /opt/lexa/upz-backend-releases
-  APP_LINK: /opt/lexa/apps/upz-backend
+  STAGING_DIR: /opt/apps/upz-backend-staging
+  RELEASES_DIR: /opt/apps/upz-backend-releases
+  APP_LINK: /opt/apps/apps/upz-backend
   KEEP_RELEASES: 2
 
 jobs:
@@ -17,7 +17,6 @@ jobs:
     runs-on: ubuntu-latest
     environment:
       name: production
-      url: ${{ vars.PRODUCTION_URL || 'https://api-upz.lexatech.my.id' }}
 
     steps:
     - name: Checkout code
@@ -49,19 +48,43 @@ jobs:
         du -sh deploy-pkg/app 2>/dev/null || true
         du -sh deploy-pkg/public 2>/dev/null || true
 
+        echo "🗜️ Compressing deployment package into single archive..."
+        tar -czf deploy-pkg.tar.gz -C deploy-pkg .
+        echo "📦 Archive size: $(du -sh deploy-pkg.tar.gz | cut -f1)"
+        rm -rf deploy-pkg
+
+    # Connect to VPN if OVPN_CONFIG secret is provided
+    - name: Connect to VPN
+      env:
+        OVPN_CONFIG: ${{ secrets.OVPN_CONFIG }}
+        VPN_USER: ${{ secrets.VPN_USER }}
+        VPN_PASS: ${{ secrets.VPN_PASS }}
+      run: |
+        if [ -z "$OVPN_CONFIG" ]; then
+          echo "OVPN_CONFIG is not set. Skipping VPN connection."
+          exit 0
+        fi
+        sudo apt-get update && sudo apt-get install -y openvpn
+        echo "$OVPN_CONFIG" | base64 --decode > client.ovpn 2>/dev/null || echo "$OVPN_CONFIG" > client.ovpn
+        printf "%s\n%s\n" "$VPN_USER" "$VPN_PASS" > auth.txt
+        sed -i 's/^auth-user-pass.*$/auth-user-pass auth.txt/' client.ovpn
+        sudo openvpn --config client.ovpn --daemon
+        sleep 12
+        ip addr show tun0 || true
+
     - name: Setup SSH
       run: |
         mkdir -p ~/.ssh
         echo "${{ secrets.VPS_SSH_KEY }}" > ~/.ssh/deploy_key
         chmod 600 ~/.ssh/deploy_key
-        ssh-keyscan -H ${{ secrets.VPS_IP }} >> ~/.ssh/known_hosts 2>/dev/null
+        ssh-keyscan -p ${{ secrets.VPS_PORT || 22 }} -H ${{ secrets.VPS_IP }} >> ~/.ssh/known_hosts 2>/dev/null
 
-    - name: Rsync to staging
+    - name: Transfer package to VPS
       run: |
-        rsync -az --no-o --no-g --delete \
-          -e "ssh -i ~/.ssh/deploy_key" \
-          deploy-pkg/ \
-          ${{ secrets.VPS_USERNAME }}@${{ secrets.VPS_IP }}:${{ env.STAGING_DIR }}/
+        rsync -az \
+          -e "ssh -p ${{ secrets.VPS_PORT || 22 }} -i ~/.ssh/deploy_key" \
+          deploy-pkg.tar.gz \
+          ${{ secrets.VPS_USERNAME }}@${{ secrets.VPS_IP }}:/opt/apps/deploy-pkg.tar.gz
 
     - name: Deploy with atomic swap
       uses: appleboy/ssh-action@v1.2.0
@@ -74,11 +97,19 @@ jobs:
         host: ${{ secrets.VPS_IP }}
         username: ${{ secrets.VPS_USERNAME }}
         key: ${{ secrets.VPS_SSH_KEY }}
+        port: ${{ secrets.VPS_PORT || 22 }}
         envs: STAGING_DIR,RELEASES_DIR,APP_LINK,KEEP_RELEASES
         script: |
           set -euo pipefail
 
-          # 1. Release Swapping
+          # 1. Extract package to staging directory
+          echo "==> Extracting deployment archive into staging"
+          rm -rf "${STAGING_DIR}"
+          mkdir -p "${STAGING_DIR}"
+          tar -xzf /opt/apps/deploy-pkg.tar.gz -C "${STAGING_DIR}"
+          rm -f /opt/apps/deploy-pkg.tar.gz
+
+          # 2. Release Swapping
           RELEASE_ID=$(date +%Y%m%d_%H%M%S)
           RELEASE_DIR="${RELEASES_DIR}/${RELEASE_ID}"
 
@@ -105,7 +136,7 @@ jobs:
 
           # 2. Restart Container (dan build Dockerfile jika ada perubahan dependensi sistem)
           echo "==> Recreating container"
-          cd /opt/lexa
+          cd /opt/apps
           docker compose up -d --build --force-recreate upz-backend
           
           # 3. Post-deploy Commands
@@ -142,3 +173,7 @@ jobs:
     - name: Cleanup SSH key
       if: always()
       run: rm -f ~/.ssh/deploy_key
+
+    - name: Disconnect VPN
+      if: always()
+      run: sudo killall openvpn 2>/dev/null || true

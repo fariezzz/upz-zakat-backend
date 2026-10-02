@@ -43,4 +43,50 @@ class Muzakki extends Model
     {
         return $this->hasMany(Transaksi::class);
     }
+
+    /**
+     * Scope query untuk kategori Dosen & Staf UNSIL
+     */
+    public function scopeDosenStaf($query)
+    {
+        return $query->where(function ($q) {
+            $q->where(function ($sub) {
+                $sub->where('kategori', 'ilike', '%Dosen%')
+                    ->orWhere('kategori', 'ilike', '%Staf%')
+                    ->orWhere('kategori', 'ilike', '%Civitas%')
+                    ->orWhere('kategori', 'ilike', '%UNSIL%');
+            })->orWhere(function ($sub) {
+                $sub->whereNull('kategori')
+                    ->where(function ($sub2) {
+                        $sub2->whereNotNull('nip')
+                             ->orWhere(function ($sub3) {
+                                 $sub3->whereNotNull('unit_kerja')
+                                      ->where('unit_kerja', '!=', '')
+                                      ->where('unit_kerja', '!=', 'Masyarakat Umum')
+                                      ->where('unit_kerja', '!=', 'Umum');
+                             });
+                    });
+            });
+        });
+    }
+
+    /**
+     * Scope query untuk kategori Masyarakat Umum
+     */
+    public function scopeUmum($query)
+    {
+        return $query->where(function ($q) {
+            $q->where('kategori', 'ilike', '%Umum%')
+              ->orWhere(function ($sub) {
+                  $sub->whereNull('kategori')
+                      ->whereNull('nip')
+                      ->where(function ($sub2) {
+                          $sub2->whereNull('unit_kerja')
+                               ->orWhere('unit_kerja', '')
+                               ->orWhere('unit_kerja', 'Masyarakat Umum')
+                               ->orWhere('unit_kerja', 'Umum');
+                      });
+              });
+        });
+    }
 }
