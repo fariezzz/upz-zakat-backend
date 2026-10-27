@@ -164,7 +164,7 @@ class BeritaController extends Controller
 
     /**
      * POST /api/berita/upload-image
-     * Helper untuk upload gambar dari editor / thumbnail.
+     * Helper untuk upload gambar dari editor / thumbnail (tersimpan di storage VPS/server).
      */
     public function uploadImage(Request $request)
     {
@@ -173,45 +173,11 @@ class BeritaController extends Controller
         ]);
 
         $file = $request->file('image');
-
-        // Periksa konfigurasi Cloudinary dari config (bukan env langsung agar tetap bekerja saat config di-cache di Render)
-        $cloudinaryConfig = config('filesystems.disks.cloudinary');
-        $isCloudinaryConfigured = !empty($cloudinaryConfig['url']) || (
-            !empty($cloudinaryConfig['cloud']) &&
-            !empty($cloudinaryConfig['key']) &&
-            !empty($cloudinaryConfig['secret'])
-        );
-
-        if ($isCloudinaryConfigured) {
-            try {
-                $cloudinary = app(\Cloudinary\Cloudinary::class);
-                $result = $cloudinary->uploadApi()->upload($file->getRealPath(), [
-                    'folder'        => 'berita',
-                    'resource_type' => 'image',
-                ]);
-
-                return response()->json([
-                    'message' => 'Gambar berhasil diunggah ke cloud.',
-                    'url'     => $result['secure_url'],
-                    'path'    => $result['public_id'],
-                ]);
-            } catch (\Throwable $e) {
-                \Illuminate\Support\Facades\Log::error('Cloudinary upload error: ' . $e->getMessage(), [
-                    'trace' => $e->getTraceAsString(),
-                ]);
-
-                return response()->json([
-                    'message' => 'Gagal mengunggah gambar ke Cloudinary: ' . $e->getMessage(),
-                ], 500);
-            }
-        }
-
-        // Fallback hanya jika Cloudinary memang tidak dikonfigurasi (misal di local development offline)
         $path = $file->store('berita', 'public');
         $relativeUrl = '/storage/' . $path;
 
         return response()->json([
-            'message' => 'Gambar berhasil diunggah.',
+            'message' => 'Gambar berhasil diunggah ke server.',
             'url'     => $relativeUrl,
             'path'    => $path,
         ]);

@@ -13,6 +13,8 @@ class DatabaseSeeder extends Seeder
         DB::table('transaksi')->delete();
 
         $this->call([
+            PengaturanSeeder::class,
+            PengurusSeeder::class,
             BeritaSeeder::class,
             MustahikSeeder::class,
             MuzakkiSeeder::class,

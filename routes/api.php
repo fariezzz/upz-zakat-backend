@@ -6,23 +6,29 @@ use App\Http\Controllers\DashboardController;
 use App\Http\Controllers\DonasiController;
 use App\Http\Controllers\JurnalController;
 use App\Http\Controllers\LaporanController;
+use App\Http\Controllers\MustahikController;
+use App\Http\Controllers\MuzakkiAccountController;
 use App\Http\Controllers\MuzakkiController;
 use App\Http\Controllers\MuzakkiExportController;
-use App\Http\Controllers\MuzakkiAccountController;
-use App\Http\Controllers\MustahikController;
+use App\Http\Controllers\PengaturanController;
+use App\Http\Controllers\PengurusController;
 use App\Http\Controllers\ProgramController;
+use App\Http\Controllers\TagihanController;
 use App\Http\Controllers\TransaksiController;
 use App\Http\Controllers\UserController;
 use App\Http\Controllers\ZakatAgreementController;
-use App\Http\Controllers\TagihanController;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Route;
 
 // ——————————————————————————————————
 // Public: Halaman Utama (tanpa auth)
 // ——————————————————————————————————
+Route::get('/public/pengaturan', [PengaturanController::class, 'publicAll']);
+Route::get('/public/pengaturan/{key}', [PengaturanController::class, 'publicShow']);
+Route::get('/public/pengurus', [PengurusController::class, 'publicList']);
 Route::post('/donasi', [DonasiController::class, 'store']);
 Route::get('/public/program', [ProgramController::class, 'publicList']);
+Route::get('/public/program/{idOrSlug}', [ProgramController::class, 'publicDetail']);
 Route::get('/public/laporan', [LaporanController::class, 'publicReport']);
 Route::get('/public/berita', [BeritaController::class, 'publicList']);
 Route::get('/public/berita/{idOrSlug}', [BeritaController::class, 'publicDetail']);
@@ -157,6 +163,23 @@ Route::middleware('auth:sanctum')->group(function () {
     // ——————————————————————————
     Route::get('/tagihan',                                [TagihanController::class, 'index']);
     Route::post('/tagihan/catat-bayar',                   [TagihanController::class, 'catatBayar']);
+
+    // ——————————————————————————
+    // Pengaturan Sistem & Halaman Publik
+    // ——————————————————————————
+    Route::get('/pengaturan/{key}',                       [PengaturanController::class, 'show']);
+    Route::post('/pengaturan/{key}',                      [PengaturanController::class, 'update']);
+    Route::put('/pengaturan/{key}',                       [PengaturanController::class, 'update']);
+
+    // ——————————————————————————
+    // Manajemen Kepengurusan UPZ
+    // ——————————————————————————
+    Route::get('/pengurus',                               [PengurusController::class, 'index']);
+    Route::post('/pengurus',                              [PengurusController::class, 'store']);
+    Route::post('/pengurus/reset-default',                [PengurusController::class, 'resetDefault']);
+    Route::post('/pengurus/{id}',                         [PengurusController::class, 'update']);
+    Route::put('/pengurus/{id}',                          [PengurusController::class, 'update']);
+    Route::delete('/pengurus/{id}',                       [PengurusController::class, 'destroy']);
 });
 
 // Route publik untuk serve file storage via /api/storage/

@@ -4,6 +4,7 @@ namespace App\Models;
 
 use App\Traits\ClearsDashboardCache;
 use Illuminate\Database\Eloquent\Model;
+use Illuminate\Support\Str;
 
 class ProgramPenyaluran extends Model
 {
@@ -14,11 +15,20 @@ class ProgramPenyaluran extends Model
     protected $fillable = [
         'kode',
         'nama',
+        'slug',
         'deskripsi',
         'target_nominal',
         'status',
         'tahun',
     ];
+
+    /**
+     * Accessor slug: generate dari nama program jika kolom belum ada/null
+     */
+    public function getSlugAttribute(): string
+    {
+        return $this->attributes['slug'] ?? (Str::slug($this->nama) ?: (string) $this->id);
+    }
 
     protected $casts = [
         'jumlah_penerima'    => 'integer',

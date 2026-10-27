@@ -2,12 +2,13 @@
 
 namespace App\Models;
 
+use App\Traits\CleansStorageFiles;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 
 class Berita extends Model
 {
-    use HasFactory;
+    use HasFactory, CleansStorageFiles;
 
     protected $table = 'berita';
 
@@ -26,6 +27,22 @@ class Berita extends Model
     protected $casts = [
         'published_at' => 'datetime',
     ];
+
+    /**
+     * Trigger event Eloquent untuk membersihkan berkas asset fisik lokal
+     */
+    protected static function booted(): void
+    {
+        static::deleting(function (Berita $berita) {
+            self::deleteStorageFile($berita->gambar);
+        });
+
+        static::updating(function (Berita $berita) {
+            if ($berita->isDirty('gambar')) {
+                self::deleteStorageFile($berita->getOriginal('gambar'));
+            }
+        });
+    }
 
     public function author()
     {
